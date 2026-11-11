@@ -23,6 +23,7 @@ farmer_down_left = pygame.image.load("assets/characters/farmer_down_left.png").c
 farmer = farmer_down
 #farm sprites
 tree = pygame.image.load("assets/farm/tree.png").convert_alpha()
+banana = pygame.image.load("assets/items/banana.png").convert_alpha()
 
 
 # farmer variables
@@ -36,6 +37,10 @@ tree_positions = [(80, 40), (35, 120), (130, 90)]
 tree_hitboxes = []
 for tree_x, tree_y in tree_positions:
     tree_hitboxes.append(pygame.Rect(tree_x + 27, tree_y + 74, 19, 5))
+#banana variables
+banana_positions = [(98, 68), (53, 148), (148, 118)]
+#carrying bananas
+carrying_bananas = False
 
 # game screen
 game_surface = pygame.Surface((game_width, game_height))
@@ -49,6 +54,20 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+    #carry bananas
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_e and not carrying_bananas:
+                farmer_center_x = farmer_x + farmer.get_width() / 2
+                farmer_center_y = farmer_y + farmer.get_height() - 4
+                for banana_x, banana_y in banana_positions.copy():
+                    banana_center_x = banana_x + banana.get_width() / 2
+                    banana_center_y = banana_y + banana.get_height() / 2
+                    distance = math.hypot(farmer_center_x - banana_center_x, farmer_center_y - banana_center_y)
+                    if distance < 40:
+                        banana_positions.remove((banana_x, banana_y))
+                        carrying_bananas = True
+                        break
+                
 
     #keyboard input
     keys = pygame.key.get_pressed()
@@ -117,6 +136,50 @@ while running:
     #draw farmer and tree
     for depth, image, x, y, in objects:
         game_surface.blit(image, (x, y))
+
+    #draw bananas
+    for banana_x, banana_y in banana_positions:
+        game_surface.blit(banana, (banana_x, banana_y))
+
+    #draw carried bananas
+    if carrying_bananas:
+        banana_x = farmer_x + 10
+        banana_y = farmer_y + 15
+        carried_banana = banana
+        if farmer == farmer_up:
+            banana_x = farmer_x + 0
+            banana_y = farmer_y - 26
+            carried_banana = banana
+        elif farmer == farmer_down:
+            banana_x = farmer_x - 6
+            banana_y = farmer_y + 18
+            carried_banana = pygame.transform.flip(banana, True, True)
+        elif farmer == farmer_right:
+            banana_x = farmer_x + 18
+            banana_y = farmer_y - 0
+            carried_banana = pygame.transform.rotate(banana, -90)
+        elif farmer == farmer_left:
+            banana_x = farmer_x - 26
+            banana_y = farmer_y - 6
+            carried_banana = pygame.transform.rotate(banana, 90)
+        elif farmer == farmer_up_right:
+            banana_x = farmer_x + 0 
+            banana_y = farmer_y - 30
+            carried_banana = pygame.transform.rotate(banana, -45)
+        elif farmer == farmer_up_left:
+            banana_x = farmer_x - 25
+            banana_y = farmer_y - 26
+            carried_banana = pygame.transform.rotate(banana, 45)
+        elif farmer == farmer_down_right:
+            banana_x = farmer_x + 6
+            banana_y = farmer_y + 4
+            carried_banana = pygame.transform.rotate(banana, -135)
+        elif farmer == farmer_down_left:
+            banana_x = farmer_x - 24
+            banana_y = farmer_y + 3
+            carried_banana = pygame.transform.rotate(banana, 135)
+
+        game_surface.blit(carried_banana, (banana_x, banana_y))
 
     #scale game to window
     scaled_surface = pygame.transform.scale(game_surface, (window_width, window_height))
