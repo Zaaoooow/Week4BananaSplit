@@ -21,13 +21,23 @@ farmer_up_left = pygame.image.load("assets/characters/farmer_up_left.png").conve
 farmer_down_right = pygame.image.load("assets/characters/farmer_down_right.png").convert_alpha()
 farmer_down_left = pygame.image.load("assets/characters/farmer_down_left.png").convert_alpha()
 farmer = farmer_down
+#farm sprites
+tree = pygame.image.load("assets/farm/tree.png").convert_alpha()
+
 
 # farmer variables
-farmer_x = 100
-farmer_y = 100
+farmer_x = 25
+farmer_y = 25
 farmer_speed = 2
 farmer = farmer_down
+# tree variables
+tree_positions = [(80, 40), (35, 120), (130, 90)]
+# tree trunk collision
+tree_hitboxes = []
+for tree_x, tree_y in tree_positions:
+    tree_hitboxes.append(pygame.Rect(tree_x + 27, tree_y + 74, 19, 5))
 
+# game screen
 game_surface = pygame.Surface((game_width, game_height))
 
 clock = pygame.time.Clock()
@@ -74,15 +84,39 @@ while running:
     if length > 0:
         move_x /= length
         move_y /= length
+    old_x = farmer_x
+    old_y = farmer_y
     farmer_x += move_x * farmer_speed
     farmer_y += move_y * farmer_speed
-    
 
+    #keeping farmer inside game screen
+    farmer_x = max(0, min(farmer_x, (game_width // 2) - farmer.get_width()))
+    farmer_y = max(0, min(farmer_y, game_height - farmer.get_height()))
+    #check tree collision
+    for hitbox in tree_hitboxes:
+        farmer_rect = pygame.Rect(farmer_x + 8, farmer_y + farmer.get_height() - 8, farmer.get_width() - 16, 8)
+        if farmer_rect.colliderect(hitbox):
+            farmer_x = old_x
+            farmer_y = old_y
 
     #draw background
     game_surface.blit(farm_background, (0,0))
-    #draw farmer
-    game_surface.blit(farmer, (farmer_x, farmer_y))
+    #draw tree and farmer
+    objects = []
+
+    #add trees to objects
+    for tree_x, tree_y in tree_positions:
+        objects.append((tree_y + 79, tree, tree_x, tree_y))
+
+    #add farmer to objects
+    objects.append((farmer_y + farmer.get_height(), farmer, farmer_x, farmer_y))
+
+    #sort objects from back to front
+    objects.sort(key = lambda obj: obj[0])
+
+    #draw farmer and tree
+    for depth, image, x, y, in objects:
+        game_surface.blit(image, (x, y))
 
     #scale game to window
     scaled_surface = pygame.transform.scale(game_surface, (window_width, window_height))
