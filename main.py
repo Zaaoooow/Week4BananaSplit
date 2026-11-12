@@ -11,6 +11,7 @@ pygame.display.set_caption(Title)
 
 # background sprites
 farm_background = pygame.image.load("assets/backgrounds/farm.png").convert_alpha()
+cutting_board = pygame.image.load("assets/backgrounds/cutting_board.png").convert_alpha()
 # character sprites
 farmer_up = pygame.image.load("assets/characters/farmer_up.png").convert_alpha()
 farmer_down = pygame.image.load("assets/characters/farmer_down.png").convert_alpha()
@@ -26,9 +27,16 @@ tree = pygame.image.load("assets/farm/tree.png").convert_alpha()
 banana = pygame.image.load("assets/items/banana.png").convert_alpha()
 conveyor = pygame.image.load("assets/farm/conveyor.png").convert_alpha()
 dropoff = pygame.image.load("assets/farm/dropoff.png").convert_alpha()
+# cutting board sprites
+receiving_box = pygame.image.load("assets/cutting_board/receiving_box.png").convert_alpha()
+large_unpeeled_banana = pygame.image.load("assets/items/large_unpeeled_banana.png").convert_alpha()
 
 #dropoff hitbox
 dropoff_rect = pygame.Rect(0, 215, 80, 30)
+#receiving box hitbox
+receiving_box_rect = pygame.Rect(240, 220, 80, 60)
+#cutting board hitbox
+cutting_board_rect = pygame.Rect(275, 26, 170, 190)
 
 # farmer variables
 farmer_x = 25
@@ -47,6 +55,11 @@ banana_positions = [[98, 68, 0], [53, 148, 0], [148, 118, 0]]
 carrying_bananas = False
 delivered_bananas = 0
 conveyor_bananas = []
+#mouse interaction
+dragging_banana = False
+dragged_banana_x = 0
+dragged_banana_y = 0
+batch_on_board = False
 
 # game screen
 game_surface = pygame.Surface((game_width, game_height))
@@ -96,10 +109,33 @@ while running:
                     banana_x = 20
                     banana_y = 230
                     conveyor_bananas.append([banana_x, banana_y, pygame.time.get_ticks()])
-
-
-                    
-                
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mouse_x = event.pos[0] * game_width // window_width
+            mouse_y = event.pos[1] * game_height // window_height
+            #cuttong board collision check
+            if not dragging_banana and not batch_on_board:
+            #pickup banan batch
+                for item in conveyor_bananas:
+                    banana_rect = pygame.Rect(item[0], item[1], banana.get_width(), banana.get_height())
+                    if banana_rect.collidepoint(mouse_x, mouse_y) and item[0] >= 270:
+                        dragging_banana = True
+                        conveyor_bananas.remove(item)
+                        break
+        # drop banana batch
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            if dragging_banana:
+                mouse_x = event.pos[0] * game_width // window_width
+                mouse_y = event.pos[1] * game_height //  window_height
+                if cutting_board_rect.collidepoint(mouse_x, mouse_y):
+                    batch_on_board = True
+                else:
+                    conveyor_bananas.append([270, 230, pygame.time.get_ticks()])
+                dragging_banana = False
+    #track mouse while dragging banana
+    if dragging_banana:
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        dragged_banana_x = mouse_x * game_width // window_width - 10
+        dragged_banana_y = mouse_y * game_height // window_height - 10
 
     #keyboard input
     keys = pygame.key.get_pressed()
@@ -155,7 +191,10 @@ while running:
             farmer_y = old_y
 
     #draw background
-    game_surface.blit(farm_background, (0,0))
+    game_surface.blit(farm_background, (0, 0))
+    game_surface.blit(cutting_board, (0, 0))
+    #draw receive box
+    game_surface.blit(receiving_box, (0, 0))
     #draw tree and farmer
     objects = []
 
@@ -184,9 +223,19 @@ while running:
 
     #dropped off bananas
     for item in conveyor_bananas:
-        if pygame.time.get_ticks() - item[2] >= 1000:
-            item[0] += 1
+        if pygame.time.get_ticks() - item[2] >= 500:
+            if item[0] < 270:
+                item[0] += 1
         game_surface.blit(banana, (item[0], item[1]))
+
+    #banana while dragging
+    if dragging_banana:
+        game_surface.blit(banana, (dragged_banana_x, dragged_banana_y))
+    #draw large banana
+    if batch_on_board:
+        large_x = cutting_board_rect.centerx - large_unpeeled_banana.get_width() // 2
+        large_y = cutting_board_rect.centery- large_unpeeled_banana.get_height() // 2
+        game_surface.blit(large_unpeeled_banana, (large_x, large_y))
 
     #draw carried bananas
     if carrying_bananas:
