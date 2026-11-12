@@ -15,7 +15,7 @@ farm_background = pygame.image.load("assets/backgrounds/farm.png").convert_alpha
 farmer_up = pygame.image.load("assets/characters/farmer_up.png").convert_alpha()
 farmer_down = pygame.image.load("assets/characters/farmer_down.png").convert_alpha()
 farmer_right = pygame.image.load("assets/characters/farmer_right.png").convert_alpha()
-farmer_left = pygame.image.load("assets/characters/farmer_left.png"). convert_alpha()
+farmer_left = pygame.image.load("assets/characters/farmer_left.png").convert_alpha()
 farmer_up_right = pygame.image.load("assets/characters/farmer_up_right.png").convert_alpha()
 farmer_up_left = pygame.image.load("assets/characters/farmer_up_left.png").convert_alpha()
 farmer_down_right = pygame.image.load("assets/characters/farmer_down_right.png").convert_alpha()
@@ -24,7 +24,11 @@ farmer = farmer_down
 #farm sprites
 tree = pygame.image.load("assets/farm/tree.png").convert_alpha()
 banana = pygame.image.load("assets/items/banana.png").convert_alpha()
+conveyor = pygame.image.load("assets/farm/conveyor.png").convert_alpha()
+dropoff = pygame.image.load("assets/farm/dropoff.png").convert_alpha()
 
+#dropoff hitbox
+dropoff_rect = pygame.Rect(0, 215, 80, 30)
 
 # farmer variables
 farmer_x = 25
@@ -38,12 +42,17 @@ tree_hitboxes = []
 for tree_x, tree_y in tree_positions:
     tree_hitboxes.append(pygame.Rect(tree_x + 27, tree_y + 74, 19, 5))
 #banana variables
-banana_positions = [(98, 68), (53, 148), (148, 118)]
+banana_positions = [[98, 68, 0], [53, 148, 0], [148, 118, 0]]
 #carrying bananas
 carrying_bananas = False
+delivered_bananas = 0
+conveyor_bananas = []
 
 # game screen
 game_surface = pygame.Surface((game_width, game_height))
+
+#font
+font = pygame.font.Font(None, 16)
 
 clock = pygame.time.Clock()
 
@@ -51,22 +60,45 @@ running = True
 
 while running:
     #events
+    #respawn bananas after 6.7 seconds
+    for item in banana_positions:
+        if item[2] != 0:
+            if pygame.time.get_ticks() - item[2] >= 6700:
+                item[2] = 0
+    #check if farmer is near dropoff
+    farmer_rect = pygame.Rect(farmer_x + 5, farmer_y + farmer.get_height() - 8, farmer.get_width() - 16, 8)
+    near_dropoff = farmer_rect.colliderect(dropoff_rect)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-    #carry bananas
+
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_e and not carrying_bananas:
-                farmer_center_x = farmer_x + farmer.get_width() / 2
-                farmer_center_y = farmer_y + farmer.get_height() - 4
-                for banana_x, banana_y in banana_positions.copy():
-                    banana_center_x = banana_x + banana.get_width() / 2
-                    banana_center_y = banana_y + banana.get_height() / 2
-                    distance = math.hypot(farmer_center_x - banana_center_x, farmer_center_y - banana_center_y)
-                    if distance < 40:
-                        banana_positions.remove((banana_x, banana_y))
-                        carrying_bananas = True
-                        break
+            if event.key == pygame.K_e:
+                # Collect bananas
+                if not carrying_bananas:
+                    farmer_center_x = farmer_x + farmer.get_width() / 2
+                    farmer_center_y = farmer_y + farmer.get_height() - 4
+                    for item in banana_positions:
+                        if item[2] == 0:
+                            banana_x = item[0]
+                            banana_y = item[1]
+                            banana_center_x = banana_x + banana.get_width() / 2
+                            banana_center_y = banana_y + banana.get_height() / 2
+                            distance = math.hypot(farmer_center_x - banana_center_x, farmer_center_y - banana_center_y)
+                            if distance < 40:
+                                item[2] = pygame.time.get_ticks() 
+                                carrying_bananas = True
+                                break
+                # Deliver bananas
+                elif near_dropoff:
+                    carrying_bananas = False
+                    delivered_bananas += 1
+                    banana_x = 20
+                    banana_y = 230
+                    conveyor_bananas.append([banana_x, banana_y, pygame.time.get_ticks()])
+
+
+                    
                 
 
     #keyboard input
@@ -110,7 +142,11 @@ while running:
 
     #keeping farmer inside game screen
     farmer_x = max(0, min(farmer_x, (game_width // 2) - farmer.get_width()))
-    farmer_y = max(0, min(farmer_y, game_height - farmer.get_height()))
+    farmer_y = max(0, min(farmer_y, game_height - 48 - farmer.get_height()))
+
+    #check if farmer is near dropoff
+    farmer_rect = pygame.Rect(farmer_x + 5, farmer_y + farmer.get_height() - 8, farmer.get_width() - 16, 8)
+    near_dropoff = farmer_rect.colliderect(dropoff_rect)
     #check tree collision
     for hitbox in tree_hitboxes:
         farmer_rect = pygame.Rect(farmer_x + 8, farmer_y + farmer.get_height() - 8, farmer.get_width() - 16, 8)
@@ -138,8 +174,19 @@ while running:
         game_surface.blit(image, (x, y))
 
     #draw bananas
-    for banana_x, banana_y in banana_positions:
-        game_surface.blit(banana, (banana_x, banana_y))
+    for item in banana_positions:
+        if item[2] == 0:
+            game_surface.blit(banana, (item[0], item[1]))
+
+    #draw dropoff and conveyor belt
+    game_surface.blit(conveyor, (0,0))
+    game_surface.blit(dropoff, (0,0))
+
+    #dropped off bananas
+    for item in conveyor_bananas:
+        if pygame.time.get_ticks() - item[2] >= 1000:
+            item[0] += 1
+        game_surface.blit(banana, (item[0], item[1]))
 
     #draw carried bananas
     if carrying_bananas:
@@ -180,6 +227,10 @@ while running:
             carried_banana = pygame.transform.rotate(banana, 135)
 
         game_surface.blit(carried_banana, (banana_x, banana_y))
+
+    #delivered banana count
+    delivered_text = font.render(f"Delivered: {delivered_bananas}", True, (255, 255, 255))
+    game_surface.blit(delivered_text, (10, 10))
 
     #scale game to window
     scaled_surface = pygame.transform.scale(game_surface, (window_width, window_height))
