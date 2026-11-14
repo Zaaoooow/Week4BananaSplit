@@ -30,6 +30,16 @@ dropoff = pygame.image.load("assets/farm/dropoff.png").convert_alpha()
 # cutting board sprites
 receiving_box = pygame.image.load("assets/cutting_board/receiving_box.png").convert_alpha()
 large_unpeeled_banana = pygame.image.load("assets/items/large_unpeeled_banana.png").convert_alpha()
+large_peeled_banana = pygame.image.load("assets/items/large_peeled_banana.png").convert_alpha()
+large_cut_banana = pygame.image.load("assets/items/large_cut_banana.png").convert_alpha()
+tray = pygame.image.load("assets/items/tray.png").convert_alpha()
+vanilla_button = pygame.image.load("assets/items/vanillabutton.png").convert_alpha()
+chocolate_button = pygame.image.load("assets/items/chocolatebutton.png").convert_alpha()
+strawberry_button = pygame.image.load("assets/items/strawberrybutton.png").convert_alpha()
+vanilla_scoop = pygame.image.load("assets/items/vanilla_scoop.png").convert_alpha()
+strawberry_scoop = pygame.image.load("assets/items/strawberry_scoop.png").convert_alpha()
+chocolate_scoop = pygame.image.load("assets/items/chocolate_scoop.png").convert_alpha()
+
 
 #dropoff hitbox
 dropoff_rect = pygame.Rect(0, 215, 80, 30)
@@ -37,6 +47,8 @@ dropoff_rect = pygame.Rect(0, 215, 80, 30)
 receiving_box_rect = pygame.Rect(240, 220, 80, 60)
 #cutting board hitbox
 cutting_board_rect = pygame.Rect(275, 26, 170, 190)
+#large banana rect peeled
+large_banana_rect = pygame.Rect(0, 0, 0, 0)
 
 # farmer variables
 farmer_x = 25
@@ -60,6 +72,31 @@ dragging_banana = False
 dragged_banana_x = 0
 dragged_banana_y = 0
 batch_on_board = False
+banana_peeled = False
+banana_cut = False
+left_half_x = 0
+right_half_x = 0
+#tray variables
+tray_x = cutting_board_rect.centerx - tray.get_width() // 2
+tray_y = - tray.get_height() # start above screen
+tray_target_y = 47
+tray_speed = 2
+tray_visible = False
+#ice button variables
+button_y = -150
+button_target_y = 50
+button_speed = 2
+buttons_arrived = False
+buttons_visible = False
+# ice cream variables
+scoop_count = 0
+selected_scoops = []
+scoop_positions = [(0, 0), (0, 0), (0, 0)]
+scoop_images = {
+    "chocolate": chocolate_scoop,
+    "strawberry": strawberry_scoop,
+    "vanilla": vanilla_scoop
+}
 
 # game screen
 game_surface = pygame.Surface((game_width, game_height))
@@ -78,6 +115,19 @@ while running:
         if item[2] != 0:
             if pygame.time.get_ticks() - item[2] >= 6700:
                 item[2] = 0
+    #tray animation
+    if tray_visible and tray_y < tray_target_y:
+        tray_y += tray_speed
+        if tray_y > tray_target_y:
+            tray_y = tray_target_y
+    #ice button animation
+    if tray_visible and tray_y >= tray_target_y:
+        buttons_visible = True
+    if buttons_visible and button_y < button_target_y:
+        button_y += button_speed
+        if button_y > button_target_y:
+            button_y = button_target_y
+            buttons_arrived = True
     #check if farmer is near dropoff
     farmer_rect = pygame.Rect(farmer_x + 5, farmer_y + farmer.get_height() - 8, farmer.get_width() - 16, 8)
     near_dropoff = farmer_rect.colliderect(dropoff_rect)
@@ -110,8 +160,35 @@ while running:
                     banana_y = 230
                     conveyor_bananas.append([banana_x, banana_y, pygame.time.get_ticks()])
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            print("mouse click detected")
             mouse_x = event.pos[0] * game_width // window_width
             mouse_y = event.pos[1] * game_height // window_height
+            # ice cream mouse collision
+            if buttons_visible and banana_cut and scoop_count < 3:
+                chocolate_rect = pygame.Rect(295, button_y - 30, chocolate_button.get_width(), chocolate_button.get_height())
+                strawberry_rect = pygame.Rect(345, button_y - 30, strawberry_button.get_width(), strawberry_button.get_height())
+                vanilla_rect = pygame.Rect(395, button_y - 30, vanilla_button.get_width(), vanilla_button.get_height())
+                if chocolate_rect.collidepoint(mouse_x, mouse_y):
+                    print("chocolate selected")
+                    selected_scoops.append("chocolate")
+                    scoop_count += 1
+                elif strawberry_rect.collidepoint(mouse_x, mouse_y):
+                    print("strawberry selected")
+                    selected_scoops.append("strawberry")
+                    scoop_count += 1
+                elif vanilla_rect.collidepoint(mouse_x, mouse_y):
+                    print("vanilla selected")
+                    selected_scoops.append("vanilla")
+                    scoop_count += 1
+            #large banana collision
+            if batch_on_board and large_banana_rect.collidepoint(mouse_x, mouse_y):
+                if not banana_peeled:
+                    banana_peeled = True
+                elif not banana_cut:
+                    banana_cut = True
+                    left_half_x = 0
+                    right_half_x = 0
+                    tray_visible = True
             #cuttong board collision check
             if not dragging_banana and not batch_on_board:
             #pickup banan batch
@@ -128,6 +205,8 @@ while running:
                 mouse_y = event.pos[1] * game_height //  window_height
                 if cutting_board_rect.collidepoint(mouse_x, mouse_y):
                     batch_on_board = True
+                    banana_peeled = False
+                    banana_cut = False
                 else:
                     conveyor_bananas.append([270, 230, pygame.time.get_ticks()])
                 dragging_banana = False
@@ -231,11 +310,43 @@ while running:
     #banana while dragging
     if dragging_banana:
         game_surface.blit(banana, (dragged_banana_x, dragged_banana_y))
+    # draw tray
+    if tray_visible:
+        game_surface.blit(tray, (tray_x, tray_y))
+    #draw ice cream buttons
+    if buttons_visible:
+        game_surface.blit(chocolate_button, (295, button_y - 30))
+        game_surface.blit(strawberry_button, (345, button_y - 30))
+        game_surface.blit(vanilla_button, (395, button_y - 30))
     #draw large banana
     if batch_on_board:
         large_x = cutting_board_rect.centerx - large_unpeeled_banana.get_width() // 2
         large_y = cutting_board_rect.centery- large_unpeeled_banana.get_height() // 2
-        game_surface.blit(large_unpeeled_banana, (large_x, large_y))
+        scoop_positions = [
+            (large_x + 15, large_y + 27),
+            (large_x + 20, large_y + 52),
+            (large_x + 15, large_y + 77)
+        ]
+        if banana_cut:
+            middle = large_cut_banana.get_width() // 2
+            left_half = large_cut_banana.subsurface((0, 0, middle, large_cut_banana.get_height()))
+            right_half = large_cut_banana.subsurface((middle, 0, large_cut_banana.get_width() - middle, large_peeled_banana.get_height()))
+            if left_half_x > - 12:
+                left_half_x -= 1
+            if right_half_x < 12:
+                right_half_x += 1
+            game_surface.blit(left_half, (large_x + left_half_x - 36, large_y - 2))
+            game_surface.blit(right_half, (large_x + middle + right_half_x - 36, large_y - 2))
+        elif banana_peeled:
+            game_surface.blit(large_peeled_banana, (large_x - 36, large_y - 2))
+        else:
+            game_surface.blit(large_unpeeled_banana, (large_x, large_y))
+        
+        for i, flavor in enumerate(selected_scoops):
+            scoop_image = scoop_images[flavor]
+            scoop_rect = scoop_image.get_rect(center = (scoop_positions[i]))
+            game_surface.blit(scoop_image, scoop_rect)
+        large_banana_rect = pygame.Rect(large_x, large_y, large_unpeeled_banana.get_width(), large_unpeeled_banana.get_height())
 
     #draw carried bananas
     if carrying_bananas:
