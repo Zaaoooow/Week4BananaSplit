@@ -4,10 +4,32 @@ from settings import *
 
 # Initialize game
 pygame.init()
+pygame.mixer.init()
 
 # Create game window
 screen = pygame.display.set_mode((window_width, window_height))
 pygame.display.set_caption(Title)
+
+game_state = "menu"
+
+#sound effects
+clicksound = pygame.mixer.Sound("assets/sounds/click.wav")
+cutsound = pygame.mixer.Sound("assets/sounds/cut.mp3")
+pickupsound = pygame.mixer.Sound("assets/sounds/pickup.mp3")
+peelsound = pygame.mixer.Sound("assets/sounds/peel.mp3")
+scoopsound = pygame.mixer.Sound("assets/sounds/scoop.mp3")
+serve_sound = pygame.mixer.Sound("assets/sounds/order.mp3")
+dropoffsound = pygame.mixer.Sound("assets/sounds/dropoff.mp3")
+currentmusic = None
+def play_music(filename):
+    global currentmusic
+    if currentmusic != filename:
+        pygame.mixer.music.load(filename)
+        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.play(-1)
+        currentmusic = filename
+
+
 
 # background sprites
 farm_background = pygame.image.load("assets/backgrounds/farm.png").convert_alpha()
@@ -39,8 +61,28 @@ strawberry_button = pygame.image.load("assets/items/strawberrybutton.png").conve
 vanilla_scoop = pygame.image.load("assets/items/vanilla_scoop.png").convert_alpha()
 strawberry_scoop = pygame.image.load("assets/items/strawberry_scoop.png").convert_alpha()
 chocolate_scoop = pygame.image.load("assets/items/chocolate_scoop.png").convert_alpha()
+serve_button = pygame.image.load("assets/items/serve_button.png").convert_alpha()
+serve_button_rect = serve_button.get_rect(center = (350, 246))
+complete_orders = 0
+#game over and win/lose
+win_screen = pygame.image.load("assets/backgrounds/win_screen.png").convert_alpha()
+lose_screen = pygame.image.load("assets/backgrounds/lose_screen.png").convert_alpha()
+final_win_screen = pygame.image.load("assets/backgrounds/final_win_screen.png").convert_alpha()
+final_lose_screen = pygame.image.load("assets/backgrounds/final_lose_screen.png").convert_alpha()
+#main menu
+main_menu = pygame.image.load("assets/backgrounds/mainmenu.png").convert_alpha()
+play_button = pygame.image.load("assets/ui/playbutton.png").convert_alpha()
+guide_button = pygame.image.load("assets/ui/guidebutton.png").convert_alpha()
+guide_screen = pygame.image.load("assets/backgrounds/guide_screen.png").convert_alpha()
+stats_button = pygame.image.load("assets/ui/statsbutton.png").convert_alpha()
+stats_screen = pygame.image.load("assets/backgrounds/stats_screen.png").convert_alpha()
 
+guide_font = pygame.font.Font(None, 20)
 
+#menu
+stats_button_rect = pygame.Rect(170, 180, 140, 25)
+play_button_rect = pygame.Rect(170, 97, 140, 25)
+guide_button_rect = pygame.Rect(170, 137, 140, 25)
 #dropoff hitbox
 dropoff_rect = pygame.Rect(0, 215, 80, 30)
 #receiving box hitbox
@@ -49,6 +91,11 @@ receiving_box_rect = pygame.Rect(240, 220, 80, 60)
 cutting_board_rect = pygame.Rect(275, 26, 170, 190)
 #large banana rect peeled
 large_banana_rect = pygame.Rect(0, 0, 0, 0)
+#win lose rects
+win_screen_rect = win_screen.get_rect(center = (game_width // 2, game_height // 2))
+lose_screen_rect = lose_screen.get_rect(center = (game_width // 2, game_height // 2))
+final_lose_screen_rect = final_lose_screen.get_rect(center = (game_width // 2, game_height // 2))
+final_win_screen_rect = final_win_screen.get_rect(center = (game_width // 2, game_height // 2))
 
 # farmer variables
 farmer_x = 25
@@ -97,6 +144,36 @@ scoop_images = {
     "strawberry": strawberry_scoop,
     "vanilla": vanilla_scoop
 }
+# banan split
+banana_split_complete = False
+
+# game timer and score
+game_time = 60
+target_orders = 8
+start_time = pygame.time.get_ticks()
+game_over = False
+game_won = False
+
+#stats
+games_played = 0
+games_won = 0
+games_lost = 0
+total_orders = 0
+highest_orders = 0
+
+try:
+    with open("stats.txt", "r") as file:
+        stats = file.readlines()
+        games_played = int(stats[0])
+        games_won = int(stats[1])
+        games_lost = int(stats[2])
+        total_orders = int(stats[3])
+        highest_orders = int(stats[4])
+except FileNotFoundError:
+    pass
+
+#levels
+level = 1
 
 # game screen
 game_surface = pygame.Surface((game_width, game_height))
@@ -110,10 +187,44 @@ running = True
 
 while running:
     #events
+    elapsed_time = (pygame.time.get_ticks() - start_time) // 1000
+    time_left = max(0, game_time - elapsed_time)
+    # check win lose
+    if game_state == "playing" and not game_over:
+        if complete_orders >= target_orders:
+            game_won = True
+            game_over = True
+        elif time_left <= 0:
+            game_over = True
+    # record stats
+        if game_over:
+            games_played += 1
+            if game_won:
+                games_won += 1
+            else:
+                games_lost += 1
+            total_orders += complete_orders
+            if complete_orders > highest_orders:
+                highest_orders = complete_orders
+            with open("stats.txt", "w") as file:
+                file.write(f"{games_played}\n")
+                file.write(f"{games_won}\n")
+                file.write(f"{games_lost}\n")
+                file.write(f"{total_orders}\n")
+                file.write(f"{highest_orders}\n")
+    if game_state == "menu" or game_state == "guide" or game_state == "stats":
+        play_music("assets/sounds/menumusic.mp3")
+    elif game_over:
+        if game_won:
+            play_music("assets/sounds/win.mp3")
+        else:
+            play_music("assets/sounds/loss.mp3")
+    else:
+        play_music("assets/sounds/gamemusic.mp3")
     #respawn bananas after 6.7 seconds
     for item in banana_positions:
         if item[2] != 0:
-            if pygame.time.get_ticks() - item[2] >= 6700:
+            if pygame.time.get_ticks() - item[2] >= 15000:
                 item[2] = 0
     #tray animation
     if tray_visible and tray_y < tray_target_y:
@@ -151,15 +262,85 @@ while running:
                             if distance < 40:
                                 item[2] = pygame.time.get_ticks() 
                                 carrying_bananas = True
+                                pickupsound.play()
                                 break
                 # Deliver bananas
                 elif near_dropoff:
                     carrying_bananas = False
                     delivered_bananas += 1
+                    dropoffsound.play()
                     banana_x = 20
                     banana_y = 230
                     conveyor_bananas.append([banana_x, banana_y, pygame.time.get_ticks()])
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if game_state == "menu":
+                mouse_x = event.pos[0] * game_width // window_width
+                mouse_y = event.pos[1] * game_height // window_height
+                if play_button_rect.collidepoint(mouse_x, mouse_y):
+                    clicksound.play()
+                    level = 1
+                    game_time = 60
+                    target_orders = 8
+                    game_over = False
+                    game_won = False
+                    game_state = "playing"
+                    start_time = pygame.time.get_ticks()
+                    continue
+                elif guide_button_rect.collidepoint(mouse_x, mouse_y):
+                    clicksound.play()
+                    game_state = "guide"
+                    continue
+                elif stats_button_rect.collidepoint(mouse_x, mouse_y):
+                    clicksound.play()
+                    game_state = "stats"
+                    continue
+            if game_state == "guide" or game_state == "stats":
+                game_state = "menu"
+                continue
+            if game_over:
+                if level == 1 and game_won:
+                    level = 2
+                    game_time = 90
+                    target_orders = 15
+                elif level == 2 and game_over:
+                    game_state = "menu"
+                    level = 1
+                    game_time = 60
+                    target_orders = 8
+                else:
+                    level = 1
+                    game_time = 60
+                    target_orders = 8
+                complete_orders = 0
+                game_over = False
+                game_won = False
+                start_time = pygame.time.get_ticks()
+                delivered_bananas = 0
+                farmer_x = 25
+                farmer_y = 25
+                farmer = farmer_down
+                carrying_bananas = False
+                banana_positions = [[98, 68, 0], [53, 148, 0], [148, 118, 0]]
+                conveyor_bananas = []
+                dragging_banana = False
+                batch_on_board = False
+                banana_peeled = False
+                banana_cut = False
+                scoop_count = 0
+                selected_scoops = []
+                banana_split_complete = False
+                tray_visible = False
+                tray_y = -tray.get_height()
+                buttons_visible = False
+                buttons_arrived = False
+                button_y = -150
+                left_half_x = 0
+                right_half_x = 0
+                dragged_banana_x = 0
+                dragged_banana_y = 0
+                large_banana_rect = pygame.Rect(0, 0, 0, 0)
+
+                continue
             print("mouse click detected")
             mouse_x = event.pos[0] * game_width // window_width
             mouse_y = event.pos[1] * game_height // window_height
@@ -172,23 +353,51 @@ while running:
                     print("chocolate selected")
                     selected_scoops.append("chocolate")
                     scoop_count += 1
+                    scoopsound.play()
                 elif strawberry_rect.collidepoint(mouse_x, mouse_y):
                     print("strawberry selected")
                     selected_scoops.append("strawberry")
                     scoop_count += 1
+                    scoopsound.play()
                 elif vanilla_rect.collidepoint(mouse_x, mouse_y):
                     print("vanilla selected")
                     selected_scoops.append("vanilla")
                     scoop_count += 1
+                    scoopsound.play()
+                if scoop_count == 3:
+                    banana_split_complete = True
+            if banana_split_complete and serve_button_rect.collidepoint(mouse_x, mouse_y):
+                complete_orders += 1
+                serve_sound.play()
+                #reset banana
+                batch_on_board = False
+                banana_peeled = False
+                banana_cut = False
+                #reset icecream
+                scoop_count = 0
+                selected_scoops = []
+                banana_split_complete = False
+                #reset tray
+                tray_visible = False
+                tray_y = -tray.get_height()
+                #reset flavor buttons
+                buttons_visible = False
+                buttons_arrived = False
+                button_y = -150
+                #rset banana animation
+                left_half_x = 0
+                right_half_x = 0
             #large banana collision
             if batch_on_board and large_banana_rect.collidepoint(mouse_x, mouse_y):
                 if not banana_peeled:
                     banana_peeled = True
+                    peelsound.play()
                 elif not banana_cut:
                     banana_cut = True
                     left_half_x = 0
                     right_half_x = 0
                     tray_visible = True
+                    cutsound.play()
             #cuttong board collision check
             if not dragging_banana and not batch_on_board:
             #pickup banan batch
@@ -220,14 +429,15 @@ while running:
     keys = pygame.key.get_pressed()
     move_x = 0
     move_y = 0
-    if keys[pygame.K_w]:
-        move_y -= 1
-    if keys[pygame.K_s]:
-        move_y += 1
-    if keys[pygame.K_a]:
-        move_x -= 1
-    if keys[pygame.K_d]:
-        move_x += 1
+    if not game_over:
+        if keys[pygame.K_w]:
+            move_y -= 1
+        if keys[pygame.K_s]:
+            move_y += 1
+        if keys[pygame.K_a]:
+            move_x -= 1
+        if keys[pygame.K_d]:
+            move_x += 1
 
     if move_x == 0 and move_y == -1:
         farmer = farmer_up
@@ -269,128 +479,192 @@ while running:
             farmer_x = old_x
             farmer_y = old_y
 
-    #draw background
-    game_surface.blit(farm_background, (0, 0))
-    game_surface.blit(cutting_board, (0, 0))
-    #draw receive box
-    game_surface.blit(receiving_box, (0, 0))
-    #draw tree and farmer
-    objects = []
+    if game_state == "menu":
+        game_surface.blit(main_menu, (0,0))
+        game_surface.blit(play_button, (0,0))
+        game_surface.blit(guide_button, (0,0))
+        game_surface.blit(stats_button, (0,0))
+    elif game_state == "guide":
+        game_surface.blit(guide_screen, (0, 0))
+        instructions = [
+            "HOW TO PLAY",
+            "",
+            "WASD - Move the farmer",
+            "E - Collect and deliver bananas",
+            "Drag a banana onto the cutting board",
+            "Click banana to peel it",
+            "Click again to cut it",
+            "Choose 3 ice cream scoops",
+            "Click SERVE to complete the order"
+        ]
+        for i, line, in enumerate(instructions):
+            text = guide_font.render(line, True, (255, 255, 255))
+            text_rect = text.get_rect(center = (game_width // 2, 35 + i * 22))
+            game_surface.blit(text, text_rect)
+    elif game_state == "stats":
+        game_surface.blit(stats_screen, (0,0))
+        win_rate = 0
+        if games_played > 0:
+            win_rate = (games_won / games_played) * 100
+        stats_text = [
+            f"Games Played: {games_played}",
+            f"Games Won: {games_won}",
+            f"Games Lost: {games_lost}",
+            f"Orders Completed: {total_orders}",
+            f"Highest Orders: {highest_orders}",
+            f"Win Rate: {win_rate:.1f} %"
+        ]
+        for i, line in enumerate(stats_text):
+            text = guide_font.render(line, True, (255, 255, 255))
+            text_rect = text.get_rect(center = (game_width // 2,75 + i * 25))
+            game_surface.blit(text, text_rect)          
+    else:
+        #draw background
+        game_surface.blit(farm_background, (0, 0))
+        game_surface.blit(cutting_board, (0, 0))
+        #draw receive box
+        game_surface.blit(receiving_box, (0, 0))
+        #draw tree and farmer
+        objects = []
 
-    #add trees to objects
-    for tree_x, tree_y in tree_positions:
-        objects.append((tree_y + 79, tree, tree_x, tree_y))
+        #add trees to objects
+        for tree_x, tree_y in tree_positions:
+            objects.append((tree_y + 79, tree, tree_x, tree_y))
 
-    #add farmer to objects
-    objects.append((farmer_y + farmer.get_height(), farmer, farmer_x, farmer_y))
+        #add farmer to objects
+        objects.append((farmer_y + farmer.get_height(), farmer, farmer_x, farmer_y))
 
-    #sort objects from back to front
-    objects.sort(key = lambda obj: obj[0])
+        #sort objects from back to front
+        objects.sort(key = lambda obj: obj[0])
 
-    #draw farmer and tree
-    for depth, image, x, y, in objects:
-        game_surface.blit(image, (x, y))
+        #draw farmer and tree
+        for depth, image, x, y, in objects:
+            game_surface.blit(image, (x, y))
 
-    #draw bananas
-    for item in banana_positions:
-        if item[2] == 0:
+        #draw bananas
+        for item in banana_positions:
+            if item[2] == 0:
+                game_surface.blit(banana, (item[0], item[1]))
+
+        #draw dropoff and conveyor belt
+        game_surface.blit(conveyor, (0,0))
+        game_surface.blit(dropoff, (0,0))
+
+        #dropped off bananas
+        for item in conveyor_bananas:
+            if pygame.time.get_ticks() - item[2] >= 500:
+                if item[0] < 270:
+                    item[0] += 1
             game_surface.blit(banana, (item[0], item[1]))
 
-    #draw dropoff and conveyor belt
-    game_surface.blit(conveyor, (0,0))
-    game_surface.blit(dropoff, (0,0))
+        #banana while dragging
+        if dragging_banana:
+            game_surface.blit(banana, (dragged_banana_x, dragged_banana_y))
+        # draw tray
+        if tray_visible:
+            game_surface.blit(tray, (tray_x, tray_y))
+        #draw ice cream buttons
+        if buttons_visible:
+            game_surface.blit(chocolate_button, (295, button_y - 30))
+            game_surface.blit(strawberry_button, (345, button_y - 30))
+            game_surface.blit(vanilla_button, (395, button_y - 30))
+        #draw large banana
+        if batch_on_board:
+            large_x = cutting_board_rect.centerx - large_unpeeled_banana.get_width() // 2
+            large_y = cutting_board_rect.centery- large_unpeeled_banana.get_height() // 2
+            scoop_positions = [
+                (large_x + 15, large_y + 27),
+                (large_x + 20, large_y + 52),
+                (large_x + 15, large_y + 77)
+            ]
+            if banana_cut:
+                middle = large_cut_banana.get_width() // 2
+                left_half = large_cut_banana.subsurface((0, 0, middle, large_cut_banana.get_height()))
+                right_half = large_cut_banana.subsurface((middle, 0, large_cut_banana.get_width() - middle, large_peeled_banana.get_height()))
+                if left_half_x > - 12:
+                    left_half_x -= 1
+                if right_half_x < 12:
+                    right_half_x += 1
+                game_surface.blit(left_half, (large_x + left_half_x - 36, large_y - 2))
+                game_surface.blit(right_half, (large_x + middle + right_half_x - 36, large_y - 2))
+            elif banana_peeled:
+                game_surface.blit(large_peeled_banana, (large_x - 36, large_y - 2))
+            else:
+                game_surface.blit(large_unpeeled_banana, (large_x, large_y))
+            
+            for i, flavor in enumerate(selected_scoops):
+                scoop_image = scoop_images[flavor]
+                scoop_rect = scoop_image.get_rect(center = (scoop_positions[i]))
+                game_surface.blit(scoop_image, scoop_rect)
+            large_banana_rect = pygame.Rect(large_x, large_y, large_unpeeled_banana.get_width(), large_unpeeled_banana.get_height())
 
-    #dropped off bananas
-    for item in conveyor_bananas:
-        if pygame.time.get_ticks() - item[2] >= 500:
-            if item[0] < 270:
-                item[0] += 1
-        game_surface.blit(banana, (item[0], item[1]))
-
-    #banana while dragging
-    if dragging_banana:
-        game_surface.blit(banana, (dragged_banana_x, dragged_banana_y))
-    # draw tray
-    if tray_visible:
-        game_surface.blit(tray, (tray_x, tray_y))
-    #draw ice cream buttons
-    if buttons_visible:
-        game_surface.blit(chocolate_button, (295, button_y - 30))
-        game_surface.blit(strawberry_button, (345, button_y - 30))
-        game_surface.blit(vanilla_button, (395, button_y - 30))
-    #draw large banana
-    if batch_on_board:
-        large_x = cutting_board_rect.centerx - large_unpeeled_banana.get_width() // 2
-        large_y = cutting_board_rect.centery- large_unpeeled_banana.get_height() // 2
-        scoop_positions = [
-            (large_x + 15, large_y + 27),
-            (large_x + 20, large_y + 52),
-            (large_x + 15, large_y + 77)
-        ]
-        if banana_cut:
-            middle = large_cut_banana.get_width() // 2
-            left_half = large_cut_banana.subsurface((0, 0, middle, large_cut_banana.get_height()))
-            right_half = large_cut_banana.subsurface((middle, 0, large_cut_banana.get_width() - middle, large_peeled_banana.get_height()))
-            if left_half_x > - 12:
-                left_half_x -= 1
-            if right_half_x < 12:
-                right_half_x += 1
-            game_surface.blit(left_half, (large_x + left_half_x - 36, large_y - 2))
-            game_surface.blit(right_half, (large_x + middle + right_half_x - 36, large_y - 2))
-        elif banana_peeled:
-            game_surface.blit(large_peeled_banana, (large_x - 36, large_y - 2))
-        else:
-            game_surface.blit(large_unpeeled_banana, (large_x, large_y))
-        
-        for i, flavor in enumerate(selected_scoops):
-            scoop_image = scoop_images[flavor]
-            scoop_rect = scoop_image.get_rect(center = (scoop_positions[i]))
-            game_surface.blit(scoop_image, scoop_rect)
-        large_banana_rect = pygame.Rect(large_x, large_y, large_unpeeled_banana.get_width(), large_unpeeled_banana.get_height())
-
-    #draw carried bananas
-    if carrying_bananas:
-        banana_x = farmer_x + 10
-        banana_y = farmer_y + 15
-        carried_banana = banana
-        if farmer == farmer_up:
-            banana_x = farmer_x + 0
-            banana_y = farmer_y - 26
+        #draw carried bananas
+        if carrying_bananas:
+            banana_x = farmer_x + 10
+            banana_y = farmer_y + 15
             carried_banana = banana
-        elif farmer == farmer_down:
-            banana_x = farmer_x - 6
-            banana_y = farmer_y + 18
-            carried_banana = pygame.transform.flip(banana, True, True)
-        elif farmer == farmer_right:
-            banana_x = farmer_x + 18
-            banana_y = farmer_y - 0
-            carried_banana = pygame.transform.rotate(banana, -90)
-        elif farmer == farmer_left:
-            banana_x = farmer_x - 26
-            banana_y = farmer_y - 6
-            carried_banana = pygame.transform.rotate(banana, 90)
-        elif farmer == farmer_up_right:
-            banana_x = farmer_x + 0 
-            banana_y = farmer_y - 30
-            carried_banana = pygame.transform.rotate(banana, -45)
-        elif farmer == farmer_up_left:
-            banana_x = farmer_x - 25
-            banana_y = farmer_y - 26
-            carried_banana = pygame.transform.rotate(banana, 45)
-        elif farmer == farmer_down_right:
-            banana_x = farmer_x + 6
-            banana_y = farmer_y + 4
-            carried_banana = pygame.transform.rotate(banana, -135)
-        elif farmer == farmer_down_left:
-            banana_x = farmer_x - 24
-            banana_y = farmer_y + 3
-            carried_banana = pygame.transform.rotate(banana, 135)
+            if farmer == farmer_up:
+                banana_x = farmer_x + 0
+                banana_y = farmer_y - 26
+                carried_banana = banana
+            elif farmer == farmer_down:
+                banana_x = farmer_x - 6
+                banana_y = farmer_y + 18
+                carried_banana = pygame.transform.flip(banana, True, True)
+            elif farmer == farmer_right:
+                banana_x = farmer_x + 18
+                banana_y = farmer_y - 0
+                carried_banana = pygame.transform.rotate(banana, -90)
+            elif farmer == farmer_left:
+                banana_x = farmer_x - 26
+                banana_y = farmer_y - 6
+                carried_banana = pygame.transform.rotate(banana, 90)
+            elif farmer == farmer_up_right:
+                banana_x = farmer_x + 0 
+                banana_y = farmer_y - 30
+                carried_banana = pygame.transform.rotate(banana, -45)
+            elif farmer == farmer_up_left:
+                banana_x = farmer_x - 25
+                banana_y = farmer_y - 26
+                carried_banana = pygame.transform.rotate(banana, 45)
+            elif farmer == farmer_down_right:
+                banana_x = farmer_x + 6
+                banana_y = farmer_y + 4
+                carried_banana = pygame.transform.rotate(banana, -135)
+            elif farmer == farmer_down_left:
+                banana_x = farmer_x - 24
+                banana_y = farmer_y + 3
+                carried_banana = pygame.transform.rotate(banana, 135)
 
-        game_surface.blit(carried_banana, (banana_x, banana_y))
+            game_surface.blit(carried_banana, (banana_x, banana_y))
 
-    #delivered banana count
-    delivered_text = font.render(f"Delivered: {delivered_bananas}", True, (255, 255, 255))
-    game_surface.blit(delivered_text, (10, 10))
+        #delivered banana count
+        delivered_text = font.render(f"Delivered: {delivered_bananas}", True, (255, 255, 255))
+        game_surface.blit(delivered_text, (10, 10))
+        #completed orders
+        score_text = font.render(f"Orders: {complete_orders}/{target_orders}", True, (255, 255, 255))
+        game_surface.blit(score_text, (10, 20))
+        #timer
+        timer_text = font.render(f"Time: {time_left}", True, (255, 255, 255))
+        game_surface.blit(timer_text, (10, 30))
+        if game_over:
+            if level == 1:
+                if game_won:
+                    game_surface.blit(win_screen, win_screen_rect)
+                else:
+                    game_surface.blit(lose_screen, lose_screen_rect)
+            elif level == 2:
+                if game_won:
+                    game_surface.blit(final_win_screen, final_lose_screen_rect)
+                else:
+                    game_surface.blit(final_lose_screen, final_lose_screen_rect)
+
+
+        if banana_split_complete:
+            complete_text = font.render(f"Banana Split Complete!", True, (255, 255, 255))
+            game_surface.blit(complete_text, (200, 20))
+            game_surface.blit(serve_button, serve_button_rect)
+
 
     #scale game to window
     scaled_surface = pygame.transform.scale(game_surface, (window_width, window_height))
