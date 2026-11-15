@@ -30,8 +30,6 @@ def play_music(filename):
         pygame.mixer.music.play(-1)
         currentmusic = filename
 
-
-
 # background sprites
 farm_background = pygame.image.load("assets/backgrounds/farm.png").convert_alpha()
 cutting_board = pygame.image.load("assets/backgrounds/cutting_board.png").convert_alpha()
@@ -86,6 +84,16 @@ rocket_bounds = secret_rocket.get_bounding_rect()
 secret_rocket = secret_rocket.subsurface(rocket_bounds).copy()
 guide_font = pygame.font.Font(None, 20)
 secret_font = pygame.font.Font(None, 12)
+secret_city = pygame.image.load("assets/backgrounds/secret_city.png").convert_alpha()
+secret_city = pygame.transform.scale(secret_city, (game_width, game_height))
+secret_city_slime = pygame.image.load("assets/backgrounds/secret_city_slime.png").convert_alpha()
+secret_city_slime = pygame.transform.scale(secret_city_slime, (game_width, game_height))
+second_object = pygame.image.load("assets/backgrounds/second_object.png").convert_alpha()
+second_object = pygame.transform.scale(second_object, (max(1, second_object.get_width()//4), max(1, second_object.get_height() // 4)))
+second_object = pygame.transform.rotate(second_object, 180)
+secret_city_destroyed = pygame.image.load("assets/backgrounds/destroyed_city.png").convert_alpha()
+secret_city_destroyed = pygame.transform.scale(secret_city_destroyed, (game_width, game_height))
+
 
 #menu
 stats_button_rect = pygame.Rect(170, 180, 140, 25)
@@ -181,6 +189,27 @@ for i in range(60):
     star_x = random.randint(0, game_width - 1)
     star_y = random.randint(0, game_height - 1)
     stars.append([star_x, star_y]) 
+city_rocket = pygame.transform.scale(
+    secret_rocket,
+    (max(1, secret_rocket.get_width() // 4),
+     max(1, secret_rocket.get_height() // 4))
+)
+city_rocket = pygame.transform.rotate(city_rocket, 180)
+city_rocket_y = -30
+city_rocket_speed = 0.4
+slime_radius = 0
+slime_exploding = False
+slime_shrinking = False
+slime_hold_timer = 0
+slime_reveal_timer = 0
+second_rocket_y = -30
+second_rocket_speed = 1
+second_rocket_hit = False
+final_explosion_radius = 0
+final_explosion_timer = 0
+city_destroyed = False
+destroyed_timer = 0
+ending_fade = 0
 
 try:
     with open("stats.txt", "r") as file:
@@ -403,6 +432,19 @@ while running:
                     secret_timer = pygame.time.get_ticks()
                     rocket_y = 170
                     smoke_particles = []
+                    city_rocket_y = -30
+                    slime_radius = 0
+                    slime_exploding = False
+                    slime_shrinking = False
+                    slime_hold_timer = 0
+                    slime_reveal_timer = 0
+                    second_rocket_y = -30
+                    second_rocket_hit = False
+                    final_explosion_radius = 0
+                    final_explosion_timer = 0
+                    city_destroyed = False
+                    destroyed_timer = 0
+                    ending_fade = 0
                     continue
                 #reset banana
                 batch_on_board = False
@@ -555,91 +597,199 @@ while running:
             game_surface.blit(text, text_rect)        
     elif game_state == "secret_ending":
         elapsed = pygame.time.get_ticks() - secret_timer
-        if elapsed < 15000:
-            game_surface.blit(secret_background, (0,0))
-        else:
-            sky_offset = ((elapsed - 15000) // 20) % game_height
-            game_surface.blit(secret_sky, (0, sky_offset))
-            game_surface.blit(secret_sky, (0, sky_offset - game_height))
-
-            #darken the sky between 20 and 25
-            if elapsed >= 20000:
-                darkness = min(255, int((elapsed - 20000) / 5000 * 255))
-                dark_overlay = pygame.Surface((game_width, game_height), pygame.SRCALPHA)
-                dark_overlay.fill((0, 0, 25, darkness))
-                game_surface.blit(dark_overlay, (0,0))
-                #stars appear after 25 seconds
-                if elapsed >= 25000:
-                    for star in stars:
-                        star[1] += 1
-                        if star[1] >= game_height:
-                            star[1] = 0
-                        pygame.draw.circle(
-                            game_surface, (255, 255, 255),
-                            (star[0], star[1]),
-                            1
-                        )
-
-        if elapsed < 3000:
-            if(elapsed // 500) % 2 == 0:
-                pygame.draw.rect(game_surface, (255, 0, 0), (225, 202, 8, 8))
-        if 3000 <= elapsed < 15000:
-            pygame.draw.circle(game_surface, (255, 255, 0), (225, 200), 3)
-        if 4000 <= elapsed < 15000:
-            pygame.draw.circle(game_surface, (255, 255, 0), (235, 200), 3)
-        if 5000 <= elapsed < 15000:
-            pygame.draw.circle(game_surface, (255, 255, 0), (245, 200), 3)
-        if 3000 <= elapsed < 6000:
-            power_text = secret_font.render("POWERING UP...", True, (0, 255, 0))
-            game_surface.blit(power_text, (207, 185))
-        if 6000 <= elapsed < 15000:
-            ready_text = secret_font.render("READY", True, (0, 255, 0))
-            game_surface.blit(ready_text, (222, 185))
-        if elapsed >= 8000:
-            if elapsed < 15000:
-                # nuke launches from machine
-                if rocket_y > -secret_rocket.get_height():
-                    rocket_y -= rocket_speed
-            elif elapsed < 20000:
-                #rockey flies upward through the sky
-                rocket_y = game_height - (elapsed - 15000) // 20
+        if elapsed >= 42000:
+            #city background
+            if city_destroyed:
+                game_surface.blit(secret_city_destroyed, (0,0))
+            elif slime_exploding:
+                game_surface.blit(secret_city_slime, (0,0))
             else:
-                rocket_y = game_height // 2 - secret_rocket.get_height() // 2
-            # create smoke whiel rockets moving
-            if rocket_y > -secret_rocket.get_height():
-                if random.randint(1,3) == 1:
-                    smoke_particles.append([
-                        rocket_x + secret_rocket.get_width() // 2 + random.randint(-5, 5),
-                        rocket_y + secret_rocket.get_height(),
-                        random.uniform(-0.5, 0.5),
-                        random.uniform(0.2, 0.6),
-                        random.randint(2, 4),
-                        60
-                    ])
-            for particle in smoke_particles[:]:
-                particle[0] += particle[2]
-                particle[1] += particle[3]
-                particle[4] += 0.04
-                particle[5] -= 1
-
-                brightness = max(40, int(160 * particle[5] / 60))
-                pygame.draw.circle(
-                    game_surface,
-                    (brightness, brightness, brightness),
-                    (int(particle[0]), int(particle[1])),
-                    int(particle[4])
-                )
-                if particle[5] <= 0:
-                    smoke_particles.remove(particle)
-
-            if rocket_y > -secret_rocket.get_height():
-                if elapsed >= 30000:
-                    angle = min(180, (elapsed - 30000) / 3000 * 180)
-                    rotated_rocket = pygame.transform.rotate(secret_rocket, angle)
-                    rocket_rect = rotated_rocket.get_rect(center = (rocket_x + secret_rocket.get_width() // 2, rocket_y + secret_rocket.get_height() // 2))
-                    game_surface.blit(rotated_rocket, rocket_rect)
+                game_surface.blit(secret_city, (0,0))
+            #rocket falls
+            if not slime_exploding:
+                if city_rocket_y < 235 - city_rocket.get_height():
+                    city_rocket_y += city_rocket_speed
                 else:
-                    game_surface.blit(secret_rocket, (rocket_x, rocket_y))
+                    slime_exploding = True
+                game_surface.blit(city_rocket, (game_width // 2 - city_rocket.get_width() //2, int(city_rocket_y)))
+            #slime explosion
+            if slime_exploding:
+                #expand
+                if not slime_shrinking and slime_hold_timer == 0:
+                    slime_radius += 5
+                    if slime_radius >= 350:
+                        slime_radius = 350
+                        slime_hold_timer = pygame.time.get_ticks()
+                #pause for 1 second
+                if slime_hold_timer != 0:
+                    if pygame.time.get_ticks() - slime_hold_timer >= 1000:
+                        slime_shrinking = True
+                #shrink
+                if slime_shrinking:
+                    slime_radius = max(0, slime_radius - 8)
+                    if slime_radius == 0 and slime_reveal_timer == 0:
+                        slime_reveal_timer = pygame.time.get_ticks()
+
+                #draw slime circle
+                if slime_radius > 0:
+                    pygame.draw.circle(game_surface, (80, 220, 60), (game_width // 2, 235), int(slime_radius))
+            if slime_reveal_timer != 0:
+                if pygame.time.get_ticks() - slime_reveal_timer >= 3000:
+                    if not second_rocket_hit:
+                        second_rocket_y += second_rocket_speed
+                        if second_rocket_y >= 235 - second_object.get_height():
+                            second_rocket_y = 235 - second_object.get_height()
+                            second_rocket_hit = True
+                            final_explosion_timer = pygame.time.get_ticks()
+                    if not city_destroyed:
+                        game_surface.blit(second_object, (game_width // 2 - second_object.get_width() // 2, int(second_rocket_y)))
+            if second_rocket_hit and not city_destroyed:
+                final_explosion_radius = min(350, final_explosion_radius + 8)
+                pygame.draw.circle(game_surface, (255, 220, 80), (game_width // 2, 235), int(final_explosion_radius))
+                if pygame.time.get_ticks() - final_explosion_timer >= 1800:
+                    destroyed_timer = pygame.time.get_ticks()
+                    city_destroyed = True
+            if city_destroyed:
+                time_since_destroyed = pygame.time.get_ticks() - destroyed_timer
+                if time_since_destroyed >= 3000:
+                    ending_fade = min(255, ending_fade + 3)
+                    fade_surface = pygame.Surface((game_width, game_height))
+                    fade_surface.fill((0, 0, 0))
+                    fade_surface.set_alpha(ending_fade)
+                    game_surface.blit(fade_surface, (0,0))
+                    if ending_fade >= 255:
+                        ending_lines = [
+                            "BANANA POWER SYSTEM - FINAL REPORT",
+                            "CRITICAL POTASSIUM OVERLOAD",
+                            "Banana energy output exceeded 9000%.",
+                            "The city has been successfully",
+                            "converted into a smoothie.. nevermind.",
+                            "Scientists recommend using fewer",
+                            "bananas next time.",
+                            "END OF REPORT"
+                        ]
+                        for i, line in enumerate(ending_lines):
+                            if i == 1:
+                                color = (255, 220, 60)
+                            else:
+                                color = (255, 255, 255)
+                            text = secret_font.render(line, True, color)
+                            text_rect = text.get_rect(center= (game_width // 2, 55 + i * 22))
+                            game_surface.blit(text, text_rect)
+        else:
+            if elapsed < 15000:
+                game_surface.blit(secret_background, (0,0))
+            else:
+                if elapsed < 33000:
+                    sky_offset = ((elapsed - 15000) // 20) % game_height
+                else:
+                    sky_offset = (900 - (elapsed - 33000) // 10) % game_height
+                game_surface.blit(secret_sky, (0, sky_offset))
+                game_surface.blit(secret_sky, (0, sky_offset - game_height))
+
+                #darken the sky between 20 and 25
+                if elapsed >= 20000:
+                    if elapsed < 33000:
+                        #sky darkens
+                        darkness = min(255, int((elapsed - 20000) / 5000 * 255))
+                    else:
+                        #sky is blue again whe it falls back down
+                        darkness = max(0, 255 - int((elapsed - 33000) / 5000 * 255))
+                    dark_overlay = pygame.Surface((game_width, game_height), pygame.SRCALPHA)
+                    dark_overlay.fill((0, 0, 25, darkness))
+                    game_surface.blit(dark_overlay, (0,0))
+                    #stars appear after 25 seconds
+                    if 25000 <= elapsed < 30000:
+                        for star in stars:
+                            if elapsed < 33000:
+                                #stars move down while rocket geos up
+                                star[1] += 1
+                                if star[1] >= game_height:
+                                    star[1] = 0
+                            else:
+                                star[1] -=2
+                                if star[1] <0:
+                                    star[1] = game_height - 1
+                            pygame.draw.circle(
+                                game_surface, (255, 255, 255),
+                                (star[0], star[1]),
+                                1
+                            )
+
+            if elapsed < 3000:
+                if(elapsed // 500) % 2 == 0:
+                    pygame.draw.rect(game_surface, (255, 0, 0), (225, 202, 8, 8))
+            if 3000 <= elapsed < 15000:
+                pygame.draw.circle(game_surface, (255, 255, 0), (225, 200), 3)
+            if 4000 <= elapsed < 15000:
+                pygame.draw.circle(game_surface, (255, 255, 0), (235, 200), 3)
+            if 5000 <= elapsed < 15000:
+                pygame.draw.circle(game_surface, (255, 255, 0), (245, 200), 3)
+            if 3000 <= elapsed < 6000:
+                power_text = secret_font.render("POWERING UP...", True, (0, 255, 0))
+                game_surface.blit(power_text, (207, 185))
+            if 6000 <= elapsed < 15000:
+                ready_text = secret_font.render("READY", True, (0, 255, 0))
+                game_surface.blit(ready_text, (222, 185))
+            if elapsed >= 8000:
+                if elapsed < 15000:
+                    # nuke launches from machine
+                    if rocket_y > -secret_rocket.get_height():
+                        rocket_y -= rocket_speed
+                elif elapsed < 20000:
+                    #rockey flies upward through the sky
+                    rocket_y = game_height - (elapsed - 15000) // 20
+                elif elapsed < 33000:
+                    #rocket stays in center while rotate
+                    rocket_y = game_height // 2 - secret_rocket.get_height() // 2
+                else:
+                    #rocket falling
+                    rocket_y = game_height // 2 - secret_rocket.get_height() // 2
+                    rocket_y += (elapsed - 33000) // 40
+                # create smoke whiel rockets moving
+                if rocket_y > -secret_rocket.get_height():
+                    if random.randint(1,3) == 1:
+                        angle = max(0, min(180, (elapsed - 30000) / 3000 * 180))
+                        radians = math.radians(angle)
+                        center_x = rocket_x + secret_rocket.get_width() / 2
+                        center_y = rocket_y + secret_rocket.get_height() / 2
+                        smoke_x = center_x + math.sin(radians) * secret_rocket.get_height() / 2
+                        smoke_y = center_y + math.cos(radians) * secret_rocket.get_height() / 2
+                        smoke_speed = random.uniform(0.2, 0.6)
+                        smoke_vx = math.sin(radians) * smoke_speed
+                        smoke_vy = math.cos(radians) * smoke_speed
+                        smoke_particles.append([
+                            smoke_x + random.randint(-5, 5),
+                            smoke_y,
+                            smoke_vx + random.uniform(-0.2, 0.2),
+                            smoke_vy,
+                            random.randint(2, 4),
+                            60
+                        ])
+                for particle in smoke_particles[:]:
+                    particle[0] += particle[2]
+                    particle[1] += particle[3]
+                    particle[4] += 0.04
+                    particle[5] -= 1
+
+                    brightness = max(40, int(160 * particle[5] / 60))
+                    pygame.draw.circle(
+                        game_surface,
+                        (brightness, brightness, brightness),
+                        (int(particle[0]), int(particle[1])),
+                        int(particle[4])
+                    )
+                    if particle[5] <= 0:
+                        smoke_particles.remove(particle)
+
+                if rocket_y > -secret_rocket.get_height():
+                    if elapsed >= 30000:
+                        angle = min(180, (elapsed - 30000) / 3000 * 180)
+                        rotated_rocket = pygame.transform.rotate(secret_rocket, angle)
+                        rocket_rect = rotated_rocket.get_rect(center = (rocket_x + secret_rocket.get_width() // 2, rocket_y + secret_rocket.get_height() // 2))
+                        game_surface.blit(rotated_rocket, rocket_rect)
+                    else:
+                        game_surface.blit(secret_rocket, (rocket_x, rocket_y))
     else:
         #draw background
         game_surface.blit(farm_background, (0, 0))
@@ -796,6 +946,9 @@ while running:
         if 8000 <= elapsed < 15000:
             shake_x = random.randint(-3, 3)
             shake_y = random.randint(-3, 3)
+        if second_rocket_hit and pygame.time.get_ticks() - final_explosion_timer < 800:
+            shake_x = random.randint(-5, 5)
+            shake_y = random.randint(-5, 5)
 
     #scale game to window
     scaled_surface = pygame.transform.scale(game_surface, (window_width, window_height))
