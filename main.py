@@ -1,5 +1,6 @@
 import pygame
 import math
+import random
 from settings import *
 
 # Initialize game
@@ -77,7 +78,13 @@ guide_screen = pygame.image.load("assets/backgrounds/guide_screen.png").convert_
 stats_button = pygame.image.load("assets/ui/statsbutton.png").convert_alpha()
 stats_screen = pygame.image.load("assets/backgrounds/stats_screen.png").convert_alpha()
 
+#animation 
+secret_background = pygame.image.load("assets/backgrounds/secret_background.png").convert_alpha()
+secret_rocket = pygame.image.load("assets/backgrounds/secret_rocket.png").convert_alpha()
+rocket_bounds = secret_rocket.get_bounding_rect()
+secret_rocket = secret_rocket.subsurface(rocket_bounds).copy()
 guide_font = pygame.font.Font(None, 20)
+secret_font = pygame.font.Font(None, 12)
 
 #menu
 stats_button_rect = pygame.Rect(170, 180, 140, 25)
@@ -149,7 +156,7 @@ banana_split_complete = False
 
 # game timer and score
 game_time = 60
-target_orders = 8
+target_orders = 6
 start_time = pygame.time.get_ticks()
 game_over = False
 game_won = False
@@ -160,6 +167,13 @@ games_won = 0
 games_lost = 0
 total_orders = 0
 highest_orders = 0
+
+#animation variables
+secret_stage = 0
+secret_timer = 0
+rocket_x = 228
+rocket_y  = 170
+rocket_speed = 1
 
 try:
     with open("stats.txt", "r") as file:
@@ -203,7 +217,6 @@ while running:
                 games_won += 1
             else:
                 games_lost += 1
-            total_orders += complete_orders
             if complete_orders > highest_orders:
                 highest_orders = complete_orders
             with open("stats.txt", "w") as file:
@@ -212,7 +225,9 @@ while running:
                 file.write(f"{games_lost}\n")
                 file.write(f"{total_orders}\n")
                 file.write(f"{highest_orders}\n")
-    if game_state == "menu" or game_state == "guide" or game_state == "stats":
+    if game_state == "secret_ending":
+        pygame.mixer.music.stop() 
+    elif game_state == "menu" or game_state == "guide" or game_state == "stats":
         play_music("assets/sounds/menumusic.mp3")
     elif game_over:
         if game_won:
@@ -280,7 +295,7 @@ while running:
                     clicksound.play()
                     level = 1
                     game_time = 60
-                    target_orders = 8
+                    target_orders = 6
                     game_over = False
                     game_won = False
                     game_state = "playing"
@@ -301,16 +316,16 @@ while running:
                 if level == 1 and game_won:
                     level = 2
                     game_time = 90
-                    target_orders = 15
+                    target_orders = 13
                 elif level == 2 and game_over:
                     game_state = "menu"
                     level = 1
                     game_time = 60
-                    target_orders = 8
+                    target_orders = 6
                 else:
                     level = 1
                     game_time = 60
-                    target_orders = 8
+                    target_orders = 6
                 complete_orders = 0
                 game_over = False
                 game_won = False
@@ -368,7 +383,19 @@ while running:
                     banana_split_complete = True
             if banana_split_complete and serve_button_rect.collidepoint(mouse_x, mouse_y):
                 complete_orders += 1
+                total_orders += 1
+                with open("stats.txt", "w") as file:
+                    file.write(f"{games_played}\n")
+                    file.write(f"{games_won}\n")
+                    file.write(f"{games_lost}\n")
+                    file.write(f"{total_orders}\n")
+                    file.write(f"{highest_orders}\n")
                 serve_sound.play()
+                if total_orders >= 1:
+                    game_state = "secret_ending"
+                    secret_timer = pygame.time.get_ticks()
+                    rocket_y = 170
+                    continue
                 #reset banana
                 batch_on_board = False
                 banana_peeled = False
@@ -429,7 +456,7 @@ while running:
     keys = pygame.key.get_pressed()
     move_x = 0
     move_y = 0
-    if not game_over:
+    if not game_over and game_state == "playing":
         if keys[pygame.K_w]:
             move_y -= 1
         if keys[pygame.K_s]:
@@ -517,7 +544,30 @@ while running:
         for i, line in enumerate(stats_text):
             text = guide_font.render(line, True, (255, 255, 255))
             text_rect = text.get_rect(center = (game_width // 2,75 + i * 25))
-            game_surface.blit(text, text_rect)          
+            game_surface.blit(text, text_rect)        
+    elif game_state == "secret_ending":
+        game_surface.blit(secret_background, (0,0))
+        elapsed = pygame.time.get_ticks() - secret_timer
+        if elapsed < 3000:
+            if(elapsed // 500) % 2 == 0:
+                pygame.draw.rect(game_surface, (255, 0, 0), (225, 202, 8, 8))
+        if elapsed >= 3000:
+            pygame.draw.circle(game_surface, (255, 255, 0), (225, 200), 3)
+        if elapsed >= 4000:
+            pygame.draw.circle(game_surface, (255, 255, 0), (235, 200), 3)
+        if elapsed >= 5000:
+            pygame.draw.circle(game_surface, (255, 255, 0), (245, 200), 3)
+        if elapsed >= 3000 and elapsed < 6000:
+            power_text = secret_font.render("POWERING UP...", True, (0, 255, 0))
+            game_surface.blit(power_text, (207, 185))
+        if elapsed >= 6000:
+            ready_text = secret_font.render("READY", True, (0, 255, 0))
+            game_surface.blit(ready_text, (222, 185))
+        if elapsed >= 8000:
+            if rocket_y > -secret_rocket.get_height():
+                rocket_y -= rocket_speed
+            game_surface.blit(secret_rocket, (rocket_x, rocket_y))
+        
     else:
         #draw background
         game_surface.blit(farm_background, (0, 0))
