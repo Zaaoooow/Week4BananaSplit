@@ -1,3 +1,6 @@
+# banana spit
+# a game where you collect bananas and make banana splits with your friend!
+# collect enough banana for a secret cool ending
 import pygame
 import math
 import random
@@ -21,6 +24,12 @@ peelsound = pygame.mixer.Sound("assets/sounds/peel.mp3")
 scoopsound = pygame.mixer.Sound("assets/sounds/scoop.mp3")
 serve_sound = pygame.mixer.Sound("assets/sounds/order.mp3")
 dropoffsound = pygame.mixer.Sound("assets/sounds/dropoff.mp3")
+powerupsound = pygame.mixer.Sound("assets/sounds/powerup.mp3")
+launchsound = pygame.mixer.Sound("assets/sounds/launch.mp3")
+spacesound = pygame.mixer.Sound("assets/sounds/space.mp3")
+fallingsound = pygame.mixer.Sound("assets/sounds/falling.mp3")
+explosionsound = pygame.mixer.Sound("assets/sounds/explosion.mp3")
+finalexplosionsound = pygame.mixer.Sound("assets/sounds/finalexplosion.mp3")
 currentmusic = None
 def play_music(filename):
     global currentmusic
@@ -215,6 +224,8 @@ city_destroyed = False
 destroyed_timer = 0
 ending_fade = 0
 
+secret_sounds_played = []
+
 try:
     with open("stats.txt", "r") as file:
         stats = file.readlines()
@@ -229,6 +240,9 @@ except FileNotFoundError:
 #levels
 level = 1
 
+#countdown
+countdown_start = 0
+countdown_duration = 3000
 # game screen
 game_surface = pygame.Surface((game_width, game_height))
 
@@ -244,7 +258,7 @@ while running:
     if paused:
         elapsed_time = (pause_start - start_time) // 1000
     else:
-        elapsed_time = (pygame.time.get_ticks() - start_time) // 1000
+        elapsed_time = max(0, (pygame.time.get_ticks() - start_time) // 1000)
     time_left = max(0, game_time - elapsed_time)
     # check win lose
     if game_state == "playing" and not game_over:
@@ -269,8 +283,7 @@ while running:
                 file.write(f"{total_orders}\n")
                 file.write(f"{highest_orders}\n")
     if game_state == "secret_ending":
-        pygame.mixer.music.stop() 
-        currentmusic = None
+        pass
     elif game_state == "menu" or game_state == "guide" or game_state == "stats":
         play_music("assets/sounds/menumusic.mp3")
     elif game_over:
@@ -373,6 +386,8 @@ while running:
                         file.write(f"{games_lost}\n")
                         file.write(f"{total_orders}\n")
                         file.write(f"{highest_orders}\n")
+                    pygame.mixer.music.stop()
+                    currentmusic = None
                     game_state = "menu"
                 continue
             if game_state == "menu":
@@ -387,6 +402,8 @@ while running:
                     game_won = False
                     game_state = "playing"
                     start_time = pygame.time.get_ticks()
+                    countdown_start = pygame.time.get_ticks()
+                    start_time = countdown_start + countdown_duration
                     #reset gameplay for new game
                     complete_orders = 0
                     delivered_bananas = 0
@@ -442,7 +459,8 @@ while running:
                 complete_orders = 0
                 game_over = False
                 game_won = False
-                start_time = pygame.time.get_ticks()
+                countdown_start = pygame.time.get_ticks()
+                start_time = countdown_start + countdown_duration
                 delivered_bananas = 0
                 farmer_x = 25
                 farmer_y = 25
@@ -506,9 +524,15 @@ while running:
                     file.write(f"{total_orders}\n")
                     file.write(f"{highest_orders}\n")
                 serve_sound.play()
-                if total_orders == 30:
+                if total_orders >= 30:
                     game_state = "secret_ending"
                     secret_timer = pygame.time.get_ticks()
+                    secret_sounds_played = []
+                    pygame.mixer.music.stop()
+                    currentmusic = None
+                    pygame.mixer.music.load("assets/sounds/secretmusic.mp3")
+                    pygame.mixer.music.set_volume(0.25)
+                    pygame.mixer.music.play(0)
                     rocket_y = 170
                     smoke_particles = []
                     city_rocket_y = -30
@@ -587,7 +611,7 @@ while running:
     keys = pygame.key.get_pressed()
     move_x = 0
     move_y = 0
-    if not game_over and game_state == "playing" and not paused:
+    if (not game_over and game_state == "playing" and not paused and pygame.time.get_ticks() >= start_time):
         if keys[pygame.K_w]:
             move_y -= 1
         if keys[pygame.K_s]:
@@ -646,18 +670,22 @@ while running:
         game_surface.blit(guide_screen, (0, 0))
         instructions = [
             "HOW TO PLAY",
-            "",
             "WASD - Move the farmer",
             "E - Collect and deliver bananas",
             "Drag a banana onto the cutting board",
             "Click banana to peel it",
             "Click again to cut it",
             "Choose 3 ice cream scoops",
-            "Click SERVE to complete the order"
+            "Click SERVE to complete the order",
+            "HINT - Get 30+ orders for secret ending.."
         ]
         for i, line, in enumerate(instructions):
-            text = guide_font.render(line, True, (255, 255, 255))
-            text_rect = text.get_rect(center = (game_width // 2, 35 + i * 22))
+            if i >= 8:
+                color = (255, 220, 80)
+            else:
+                color = (255, 255, 255)
+            text = guide_font.render(line, True, (color))
+            text_rect = text.get_rect(center = (game_width // 2, 40 + i * 22))
             game_surface.blit(text, text_rect)
     elif game_state == "stats":
         game_surface.blit(stats_screen, (0,0))
@@ -675,14 +703,27 @@ while running:
             f"Orders Completed: {total_orders}",
             f"Highest Orders: {highest_orders}",
             f"Win Rate: {win_rate:.1f} %",
-            f"Secret Ending:{secret_progress}"
+            f"Secret Ending{secret_progress}"
         ]
         for i, line in enumerate(stats_text):
             text = guide_font.render(line, True, (255, 255, 255))
-            text_rect = text.get_rect(center = (game_width // 2,75 + i * 25))
+            text_rect = text.get_rect(center = (game_width // 2,75 + i * 25 - 20))
             game_surface.blit(text, text_rect)        
     elif game_state == "secret_ending":
         elapsed = pygame.time.get_ticks() - secret_timer
+        if elapsed >= 3000 and "powerup" not in secret_sounds_played:
+            powerupsound.play()
+            secret_sounds_played.append("powerup")
+        if elapsed >= 8000 and "launch" not in secret_sounds_played:
+            launchsound.play()
+            secret_sounds_played.append("launch")
+        if elapsed >= 15000 and "space" not in secret_sounds_played:
+            spacesound.play()
+            secret_sounds_played.append("space")
+        if elapsed >= 33000 and "falling" not in secret_sounds_played:
+            spacesound.stop()
+            fallingsound.play()
+            secret_sounds_played.append("falling")
         if elapsed >= 42000:
             #city background
             if city_destroyed:
@@ -697,6 +738,7 @@ while running:
                     city_rocket_y += city_rocket_speed
                 else:
                     slime_exploding = True
+                    explosionsound.play()
                 game_surface.blit(city_rocket, (game_width // 2 - city_rocket.get_width() //2, int(city_rocket_y)))
             #slime explosion
             if slime_exploding:
@@ -727,6 +769,7 @@ while running:
                             second_rocket_y = 235 - second_object.get_height()
                             second_rocket_hit = True
                             final_explosion_timer = pygame.time.get_ticks()
+                            finalexplosionsound.play()
                     if not city_destroyed:
                         game_surface.blit(second_object, (game_width // 2 - second_object.get_width() // 2, int(second_rocket_y)))
             if second_rocket_hit and not city_destroyed:
@@ -941,7 +984,7 @@ while running:
             if banana_cut:
                 middle = large_cut_banana.get_width() // 2
                 left_half = large_cut_banana.subsurface((0, 0, middle, large_cut_banana.get_height()))
-                right_half = large_cut_banana.subsurface((middle, 0, large_cut_banana.get_width() - middle, large_peeled_banana.get_height()))
+                right_half = large_cut_banana.subsurface((middle, 0, large_cut_banana.get_width() - middle, large_cut_banana.get_height()))
                 if not paused and left_half_x > - 12:
                     left_half_x -= 1
                 if not paused and right_half_x < 12:
@@ -1005,6 +1048,15 @@ while running:
         #completed orders
         score_text = font.render(f"Orders: {complete_orders}/{target_orders}", True, (255, 255, 255))
         game_surface.blit(score_text, (10, 20))
+        #order progress bar
+        bar_x = 10
+        bar_y = 52
+        bar_width = 100
+        bar_height = 7
+        progress = min(1, total_orders / 30)
+        pygame.draw.rect(game_surface, (60, 60, 60), (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(game_surface, (100, 220, 100), (bar_x, bar_y, int(bar_width * progress), bar_height))
+        pygame.draw.rect(game_surface, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 1)
         #timer
         if time_left <= 10 and not game_over:
             if (pause_start if paused else pygame.time.get_ticks()) // 300 % 2 == 0:
@@ -1035,10 +1087,17 @@ while running:
                     game_surface.blit(final_lose_screen, final_lose_screen_rect)
 
 
-        if banana_split_complete:
+        if banana_split_complete and not game_over:
             complete_text = font.render(f"Banana Split Complete!", True, (255, 255, 255))
             game_surface.blit(complete_text, (200, 20))
             game_surface.blit(serve_button, serve_button_rect)
+        if game_state == "playing" and not game_over:
+            countdown_elapsed = pygame.time.get_ticks() - countdown_start
+            if countdown_elapsed < countdown_duration:
+                number = 3 - countdown_elapsed // 1000
+                countdown_text = guide_font.render(str(number), True, (255, 255, 0))
+                countdown_rect = countdown_text.get_rect(center = (game_width // 2, game_height // 2))
+                game_surface.blit(countdown_text, countdown_rect)
     #pause screen im so tired
     if paused and game_state == "playing" and not game_over:
         #darkened bakcground
