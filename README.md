@@ -1,3 +1,9 @@
+How to download and run:
+- step 1: go to the release file and download the folder BananaSplit
+- step 2: extract the folder and open it
+- step 3: click the BananaSplit exe file and run it
+- step 4: Have fun
+
 First hour:
 functions: 
 - Switched from c++ raylibs which was what i was using the past few weeks, to python pygame because i already understand
