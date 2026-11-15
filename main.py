@@ -81,6 +81,7 @@ stats_screen = pygame.image.load("assets/backgrounds/stats_screen.png").convert_
 #animation 
 secret_background = pygame.image.load("assets/backgrounds/secret_background.png").convert_alpha()
 secret_rocket = pygame.image.load("assets/backgrounds/secret_rocket.png").convert_alpha()
+secret_sky = pygame.image.load("assets/backgrounds/secret_sky.png").convert_alpha()
 rocket_bounds = secret_rocket.get_bounding_rect()
 secret_rocket = secret_rocket.subsurface(rocket_bounds).copy()
 guide_font = pygame.font.Font(None, 20)
@@ -174,6 +175,12 @@ secret_timer = 0
 rocket_x = 228
 rocket_y  = 170
 rocket_speed = 1
+smoke_particles = []
+stars = []
+for i in range(60):
+    star_x = random.randint(0, game_width - 1)
+    star_y = random.randint(0, game_height - 1)
+    stars.append([star_x, star_y]) 
 
 try:
     with open("stats.txt", "r") as file:
@@ -395,6 +402,7 @@ while running:
                     game_state = "secret_ending"
                     secret_timer = pygame.time.get_ticks()
                     rocket_y = 170
+                    smoke_particles = []
                     continue
                 #reset banana
                 batch_on_board = False
@@ -546,28 +554,92 @@ while running:
             text_rect = text.get_rect(center = (game_width // 2,75 + i * 25))
             game_surface.blit(text, text_rect)        
     elif game_state == "secret_ending":
-        game_surface.blit(secret_background, (0,0))
         elapsed = pygame.time.get_ticks() - secret_timer
+        if elapsed < 15000:
+            game_surface.blit(secret_background, (0,0))
+        else:
+            sky_offset = ((elapsed - 15000) // 20) % game_height
+            game_surface.blit(secret_sky, (0, sky_offset))
+            game_surface.blit(secret_sky, (0, sky_offset - game_height))
+
+            #darken the sky between 20 and 25
+            if elapsed >= 20000:
+                darkness = min(255, int((elapsed - 20000) / 5000 * 255))
+                dark_overlay = pygame.Surface((game_width, game_height), pygame.SRCALPHA)
+                dark_overlay.fill((0, 0, 25, darkness))
+                game_surface.blit(dark_overlay, (0,0))
+                #stars appear after 25 seconds
+                if elapsed >= 25000:
+                    for star in stars:
+                        star[1] += 1
+                        if star[1] >= game_height:
+                            star[1] = 0
+                        pygame.draw.circle(
+                            game_surface, (255, 255, 255),
+                            (star[0], star[1]),
+                            1
+                        )
+
         if elapsed < 3000:
             if(elapsed // 500) % 2 == 0:
                 pygame.draw.rect(game_surface, (255, 0, 0), (225, 202, 8, 8))
-        if elapsed >= 3000:
+        if 3000 <= elapsed < 15000:
             pygame.draw.circle(game_surface, (255, 255, 0), (225, 200), 3)
-        if elapsed >= 4000:
+        if 4000 <= elapsed < 15000:
             pygame.draw.circle(game_surface, (255, 255, 0), (235, 200), 3)
-        if elapsed >= 5000:
+        if 5000 <= elapsed < 15000:
             pygame.draw.circle(game_surface, (255, 255, 0), (245, 200), 3)
-        if elapsed >= 3000 and elapsed < 6000:
+        if 3000 <= elapsed < 6000:
             power_text = secret_font.render("POWERING UP...", True, (0, 255, 0))
             game_surface.blit(power_text, (207, 185))
-        if elapsed >= 6000:
+        if 6000 <= elapsed < 15000:
             ready_text = secret_font.render("READY", True, (0, 255, 0))
             game_surface.blit(ready_text, (222, 185))
         if elapsed >= 8000:
+            if elapsed < 15000:
+                # nuke launches from machine
+                if rocket_y > -secret_rocket.get_height():
+                    rocket_y -= rocket_speed
+            elif elapsed < 20000:
+                #rockey flies upward through the sky
+                rocket_y = game_height - (elapsed - 15000) // 20
+            else:
+                rocket_y = game_height // 2 - secret_rocket.get_height() // 2
+            # create smoke whiel rockets moving
             if rocket_y > -secret_rocket.get_height():
-                rocket_y -= rocket_speed
-            game_surface.blit(secret_rocket, (rocket_x, rocket_y))
-        
+                if random.randint(1,3) == 1:
+                    smoke_particles.append([
+                        rocket_x + secret_rocket.get_width() // 2 + random.randint(-5, 5),
+                        rocket_y + secret_rocket.get_height(),
+                        random.uniform(-0.5, 0.5),
+                        random.uniform(0.2, 0.6),
+                        random.randint(2, 4),
+                        60
+                    ])
+            for particle in smoke_particles[:]:
+                particle[0] += particle[2]
+                particle[1] += particle[3]
+                particle[4] += 0.04
+                particle[5] -= 1
+
+                brightness = max(40, int(160 * particle[5] / 60))
+                pygame.draw.circle(
+                    game_surface,
+                    (brightness, brightness, brightness),
+                    (int(particle[0]), int(particle[1])),
+                    int(particle[4])
+                )
+                if particle[5] <= 0:
+                    smoke_particles.remove(particle)
+
+            if rocket_y > -secret_rocket.get_height():
+                if elapsed >= 30000:
+                    angle = min(180, (elapsed - 30000) / 3000 * 180)
+                    rotated_rocket = pygame.transform.rotate(secret_rocket, angle)
+                    rocket_rect = rotated_rocket.get_rect(center = (rocket_x + secret_rocket.get_width() // 2, rocket_y + secret_rocket.get_height() // 2))
+                    game_surface.blit(rotated_rocket, rocket_rect)
+                else:
+                    game_surface.blit(secret_rocket, (rocket_x, rocket_y))
     else:
         #draw background
         game_surface.blit(farm_background, (0, 0))
@@ -715,12 +787,26 @@ while running:
             game_surface.blit(complete_text, (200, 20))
             game_surface.blit(serve_button, serve_button_rect)
 
+    #screen shake
+    shake_x = 0
+    shake_y = 0
+
+    if game_state == "secret_ending":
+        elapsed = pygame.time.get_ticks() - secret_timer
+        if 8000 <= elapsed < 15000:
+            shake_x = random.randint(-3, 3)
+            shake_y = random.randint(-3, 3)
 
     #scale game to window
     scaled_surface = pygame.transform.scale(game_surface, (window_width, window_height))
 
+    #scale shake to window res
+    shake_x = shake_x * window_width // game_width
+    shake_y = shake_y * window_height // game_height
+
     #display game
-    screen.blit(scaled_surface, (0,0))
+    screen.fill((0,0,0))
+    screen.blit(scaled_surface, (shake_x, shake_y))
     pygame.display.flip()
 
     #limit fps
