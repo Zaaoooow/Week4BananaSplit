@@ -83,7 +83,7 @@ secret_sky = pygame.image.load("assets/backgrounds/secret_sky.png").convert_alph
 rocket_bounds = secret_rocket.get_bounding_rect()
 secret_rocket = secret_rocket.subsurface(rocket_bounds).copy()
 guide_font = pygame.font.Font(None, 20)
-secret_font = pygame.font.Font(None, 12)
+secret_font = pygame.font.Font(None, 15)
 secret_city = pygame.image.load("assets/backgrounds/secret_city.png").convert_alpha()
 secret_city = pygame.transform.scale(secret_city, (game_width, game_height))
 secret_city_slime = pygame.image.load("assets/backgrounds/secret_city_slime.png").convert_alpha()
@@ -170,6 +170,10 @@ start_time = pygame.time.get_ticks()
 game_over = False
 game_won = False
 
+#pause
+paused = False
+pause_start = 0
+
 #stats
 games_played = 0
 games_won = 0
@@ -237,7 +241,10 @@ running = True
 
 while running:
     #events
-    elapsed_time = (pygame.time.get_ticks() - start_time) // 1000
+    if paused:
+        elapsed_time = (pause_start - start_time) // 1000
+    else:
+        elapsed_time = (pygame.time.get_ticks() - start_time) // 1000
     time_left = max(0, game_time - elapsed_time)
     # check win lose
     if game_state == "playing" and not game_over:
@@ -263,6 +270,7 @@ while running:
                 file.write(f"{highest_orders}\n")
     if game_state == "secret_ending":
         pygame.mixer.music.stop() 
+        currentmusic = None
     elif game_state == "menu" or game_state == "guide" or game_state == "stats":
         play_music("assets/sounds/menumusic.mp3")
     elif game_over:
@@ -272,20 +280,21 @@ while running:
             play_music("assets/sounds/loss.mp3")
     else:
         play_music("assets/sounds/gamemusic.mp3")
-    #respawn bananas after 6.7 seconds
-    for item in banana_positions:
-        if item[2] != 0:
-            if pygame.time.get_ticks() - item[2] >= 15000:
-                item[2] = 0
+    #respawn bananas after 15 seconds
+    if not paused:
+        for item in banana_positions:
+            if item[2] != 0:
+                if pygame.time.get_ticks() - item[2] >= 15000:
+                    item[2] = 0
     #tray animation
-    if tray_visible and tray_y < tray_target_y:
+    if not paused and tray_visible and tray_y < tray_target_y:
         tray_y += tray_speed
         if tray_y > tray_target_y:
             tray_y = tray_target_y
-    #ice button animation
+    #icecream button animation
     if tray_visible and tray_y >= tray_target_y:
         buttons_visible = True
-    if buttons_visible and button_y < button_target_y:
+    if not paused and buttons_visible and button_y < button_target_y:
         button_y += button_speed
         if button_y > button_target_y:
             button_y = button_target_y
@@ -298,7 +307,22 @@ while running:
             running = False
 
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_e:
+            if event.key == pygame.K_ESCAPE and game_state == "playing" and not game_over:
+                paused = not paused
+                if paused:
+                    pause_start = pygame.time.get_ticks()
+                else:
+                    pause_duration = pygame.time.get_ticks() - pause_start
+                    start_time += pause_duration
+                    for item in banana_positions:
+                        if item[2] != 0:
+                            item[2] += pause_duration
+                    for item in conveyor_bananas:
+                        item[2] += pause_duration
+            if paused:
+                continue
+
+            if event.key == pygame.K_e and game_state == "playing" and not game_over:
                 # Collect bananas
                 if not carrying_bananas:
                     farmer_center_x = farmer_x + farmer.get_width() / 2
@@ -324,6 +348,33 @@ while running:
                     banana_y = 230
                     conveyor_bananas.append([banana_x, banana_y, pygame.time.get_ticks()])
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if paused:
+                mouse_x = event.pos[0] * game_width // window_width
+                mouse_y = event.pos[1] * game_height // window_height
+                play_rect = pygame.Rect(game_width // 2 - 25, game_height // 2 - 25, 50, 50)
+                if play_rect.collidepoint(mouse_x, mouse_y):
+                    paused = False
+                    pause_duration = pygame.time.get_ticks() - pause_start
+                    start_time += pause_duration
+                    for item in banana_positions:
+                        if item[2] != 0:
+                            item[2] += pause_duration
+                    for item in conveyor_bananas:
+                        item[2] += pause_duration
+                continue
+            if game_state == "secret_ending":
+                if ending_fade >= 255:
+                    clicksound.play()
+                    #reset secret ending rpogress
+                    total_orders = 0
+                    with open("stats.txt", "w") as file:
+                        file.write(f"{games_played}\n")
+                        file.write(f"{games_won}\n")
+                        file.write(f"{games_lost}\n")
+                        file.write(f"{total_orders}\n")
+                        file.write(f"{highest_orders}\n")
+                    game_state = "menu"
+                continue
             if game_state == "menu":
                 mouse_x = event.pos[0] * game_width // window_width
                 mouse_y = event.pos[1] * game_height // window_height
@@ -336,6 +387,32 @@ while running:
                     game_won = False
                     game_state = "playing"
                     start_time = pygame.time.get_ticks()
+                    #reset gameplay for new game
+                    complete_orders = 0
+                    delivered_bananas = 0
+                    farmer_x = 25
+                    farmer_y = 25
+                    farmer = farmer_down
+                    carrying_bananas = False
+                    banana_positions = [[98, 68, 0], [53, 148, 0], [148, 118, 0]]
+                    conveyor_bananas = []
+                    dragging_banana = False
+                    batch_on_board = False
+                    banana_peeled = False
+                    banana_cut = False
+                    scoop_count = 0
+                    selected_scoops = []
+                    banana_split_complete = False
+                    tray_visible = False
+                    tray_y = -tray.get_height()
+                    buttons_visible = False
+                    buttons_arrived = False
+                    button_y = -150
+                    left_half_x = 0
+                    right_half_x = 0
+                    large_banana_rect = pygame.Rect(0, 0, 0, 0)
+                    paused = False
+                    pause_start = 0
                     continue
                 elif guide_button_rect.collidepoint(mouse_x, mouse_y):
                     clicksound.play()
@@ -392,6 +469,8 @@ while running:
                 large_banana_rect = pygame.Rect(0, 0, 0, 0)
 
                 continue
+            if game_state != "playing" or game_over:
+                continue
             print("mouse click detected")
             mouse_x = event.pos[0] * game_width // window_width
             mouse_y = event.pos[1] * game_height // window_height
@@ -427,7 +506,7 @@ while running:
                     file.write(f"{total_orders}\n")
                     file.write(f"{highest_orders}\n")
                 serve_sound.play()
-                if total_orders >= 1:
+                if total_orders == 30:
                     game_state = "secret_ending"
                     secret_timer = pygame.time.get_ticks()
                     rocket_y = 170
@@ -486,6 +565,8 @@ while running:
                         break
         # drop banana batch
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            if paused or game_state != "playing" or game_over:
+                continue
             if dragging_banana:
                 mouse_x = event.pos[0] * game_width // window_width
                 mouse_y = event.pos[1] * game_height //  window_height
@@ -506,7 +587,7 @@ while running:
     keys = pygame.key.get_pressed()
     move_x = 0
     move_y = 0
-    if not game_over and game_state == "playing":
+    if not game_over and game_state == "playing" and not paused:
         if keys[pygame.K_w]:
             move_y -= 1
         if keys[pygame.K_s]:
@@ -583,13 +664,18 @@ while running:
         win_rate = 0
         if games_played > 0:
             win_rate = (games_won / games_played) * 100
+        if total_orders >= 30:
+            secret_progress = "UNLOCKED"
+        else:
+            secret_progress = "__"
         stats_text = [
             f"Games Played: {games_played}",
             f"Games Won: {games_won}",
             f"Games Lost: {games_lost}",
             f"Orders Completed: {total_orders}",
             f"Highest Orders: {highest_orders}",
-            f"Win Rate: {win_rate:.1f} %"
+            f"Win Rate: {win_rate:.1f} %",
+            f"Secret Ending:{secret_progress}"
         ]
         for i, line in enumerate(stats_text):
             text = guide_font.render(line, True, (255, 255, 255))
@@ -668,6 +754,9 @@ while running:
                             "bananas next time.",
                             "END OF REPORT"
                         ]
+                        continue_text = secret_font.render("CLICK ANYWHERE TO CONTINUE", True, (180, 180, 180))
+                        continue_rect = continue_text.get_rect(center = (game_width // 2, 245))
+                        game_surface.blit(continue_text, continue_rect)
                         for i, line in enumerate(ending_lines):
                             if i == 1:
                                 color = (255, 220, 60)
@@ -824,7 +913,7 @@ while running:
 
         #dropped off bananas
         for item in conveyor_bananas:
-            if pygame.time.get_ticks() - item[2] >= 500:
+            if not paused and pygame.time.get_ticks() - item[2] >= 500:
                 if item[0] < 270:
                     item[0] += 1
             game_surface.blit(banana, (item[0], item[1]))
@@ -853,9 +942,9 @@ while running:
                 middle = large_cut_banana.get_width() // 2
                 left_half = large_cut_banana.subsurface((0, 0, middle, large_cut_banana.get_height()))
                 right_half = large_cut_banana.subsurface((middle, 0, large_cut_banana.get_width() - middle, large_peeled_banana.get_height()))
-                if left_half_x > - 12:
+                if not paused and left_half_x > - 12:
                     left_half_x -= 1
-                if right_half_x < 12:
+                if not paused and right_half_x < 12:
                     right_half_x += 1
                 game_surface.blit(left_half, (large_x + left_half_x - 36, large_y - 2))
                 game_surface.blit(right_half, (large_x + middle + right_half_x - 36, large_y - 2))
@@ -917,8 +1006,22 @@ while running:
         score_text = font.render(f"Orders: {complete_orders}/{target_orders}", True, (255, 255, 255))
         game_surface.blit(score_text, (10, 20))
         #timer
-        timer_text = font.render(f"Time: {time_left}", True, (255, 255, 255))
+        if time_left <= 10 and not game_over:
+            if (pause_start if paused else pygame.time.get_ticks()) // 300 % 2 == 0:
+                timer_color = (255, 0, 0)
+            else:
+                timer_color = (255, 255, 255)
+        else: 
+            timer_color = (255, 255, 255)
+        timer_text = font.render(f"Time: {time_left}", True, (timer_color))
         game_surface.blit(timer_text, (10, 30))
+        #secreting ending progress
+        if total_orders >= 30:
+            secret_progress = "UNLOCKED"
+        else:
+            secret_progress = "__"
+        secret_text = font.render(f"Secret Ending: {secret_progress}", True, (255, 255, 255))
+        game_surface.blit(secret_text, (10, 40))
         if game_over:
             if level == 1:
                 if game_won:
@@ -927,7 +1030,7 @@ while running:
                     game_surface.blit(lose_screen, lose_screen_rect)
             elif level == 2:
                 if game_won:
-                    game_surface.blit(final_win_screen, final_lose_screen_rect)
+                    game_surface.blit(final_win_screen, final_win_screen_rect)
                 else:
                     game_surface.blit(final_lose_screen, final_lose_screen_rect)
 
@@ -936,6 +1039,20 @@ while running:
             complete_text = font.render(f"Banana Split Complete!", True, (255, 255, 255))
             game_surface.blit(complete_text, (200, 20))
             game_surface.blit(serve_button, serve_button_rect)
+    #pause screen im so tired
+    if paused and game_state == "playing" and not game_over:
+        #darkened bakcground
+        overlay = pygame.Surface((game_width, game_height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        game_surface.blit(overlay, (0,0))
+        # traiangle play button
+        center_x = game_width // 2
+        center_y = game_height // 2
+        pygame.draw.polygon(game_surface, (255, 255, 255), [
+            (center_x - 10, center_y - 20),
+            (center_x - 10, center_y + 20),
+            (center_x + 20, center_y)
+        ])
 
     #screen shake
     shake_x = 0
