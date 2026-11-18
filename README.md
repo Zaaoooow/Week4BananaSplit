@@ -16,4 +16,12 @@ How to download and run:
 <img width="1883" height="1071" alt="Screenshot 2026-11-15 003314" src="https://github.com/user-attachments/assets/d7db3da0-2695-4101-bf0d-ba47042e45ca" />
 <img width="1905" height="1090" alt="Screenshot 2026-11-15 040639" src="https://github.com/user-attachments/assets/79b29c50-117d-4fa9-ae79-846cc3a54640" />
 
+How:
+i made this project using pygame, a library in python, and i used this because i was switching over from raylibs in c++ and i hadn't have has much things in raylibs
+than i did in pygame and there is pixel perfect collisions in pygame so i used this so i can have better collisions, but overall it was not hard to use because, its pretty much the same,
+and since i have used python before it was easy to pickup. I would say i nested alot of loops in this and alot of positioning, and i also learned how to make new art.
 
+Why:
+My idea for this game was based off the theme if you can't tell, it was split screen, but since i thought banana split was mentioned aswell, maybe if i made something related to that
+aswell, it would get good bonuses! so i thought of this, farming bananas and making abanana splits, originally, i was planning to just make a banana fruit stand where i just cut fruits, 
+but i changed my mind during my planning.
