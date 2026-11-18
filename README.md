@@ -1,6 +1,7 @@
 game: banana split
 a game where you collect bananas and your friend on the right makes the banana splits, you can play solo, or with a friend!
-guide is in game and when you get to 30, there will be a cool surprise!
+There are currently 2 modes and a secret not so secret ending that plays when you reach 30 total orders. 
+You use wasd and e to interact on the left side and the right side of the screen is a point and click.
 
 There is a how to play guide in game!
 
